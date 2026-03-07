@@ -24,20 +24,31 @@ export default function DocumentsPage() {
   const [showUpload, setShowUpload] = useState(false)
   const [projectId, setProjectId] = useState<string | null>(null)
   const [form, setForm] = useState({ title: '', category: 'Contracts', version_label: 'v1', document_date: '' })
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
   useEffect(() => {
     async function load() {
-      const { data: projects } = await supabase.from('projects').select('id').limit(1)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1)
+
       if (!projects?.length) return
       const pid = projects[0].id
       setProjectId(pid)
+
       const { data: docs } = await supabase
         .from('documents')
         .select('*')
         .eq('project_id', pid)
         .order('upload_date', { ascending: false })
+
       setDocuments(docs ?? [])
       setLoading(false)
     }
@@ -48,21 +59,23 @@ export default function DocumentsPage() {
     e.preventDefault()
     if (!fileRef.current?.files?.[0] || !projectId) return
     setUploading(true)
+    setUploadError(null)
 
     const file = fileRef.current.files[0]
     const fileExt = file.name.split('.').pop()
     const fileName = `${Date.now()}.${fileExt}`
     const filePath = `${projectId}/${fileName}`
 
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file)
+    const { error: storageError } = await supabase.storage
+  .from('documents')
+  .upload(filePath, file)
 
-    if (uploadError) {
-      alert('Upload failed: ' + uploadError.message)
-      setUploading(false)
-      return
-    }
+if (storageError) {
+  alert('Storage error: ' + JSON.stringify(storageError))
+  setUploading(false)
+  return
+}
+alert('Storage succeeded! Path: ' + filePath)
 
     const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath)
 
@@ -73,15 +86,27 @@ export default function DocumentsPage() {
         title: form.title,
         category: form.category,
         version_label: form.version_label,
-        version_group: form.title.toLowerCase().replace(/\s+/g, '-'),
+        version_group: crypto.randomUUID(),
         document_date: form.document_date || null,
+        upload_date: new Date().toISOString(),
         file_url: publicUrl,
         is_current: true,
       })
       .select()
       .single()
+      if (dbError) {
+  alert('DB error: ' + JSON.stringify(dbError))
+  setUploading(false)
+  return
+}
 
-    if (!dbError && newDoc) {
+    if (dbError) {
+      setUploadError('Database error: ' + dbError.message)
+      setUploading(false)
+      return
+    }
+
+    if (newDoc) {
       setDocuments(prev => [newDoc, ...prev])
     }
 
@@ -189,6 +214,19 @@ export default function DocumentsPage() {
               <button className="modal-close" onClick={() => setShowUpload(false)}>✕</button>
             </div>
 
+            {uploadError && (
+              <div style={{
+                background: '#FDF0ED',
+                border: '1px solid #E8856A',
+                borderRadius: 4,
+                padding: '10px 16px',
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 12,
+                color: '#C0532A',
+                marginBottom: 20,
+              }}>{uploadError}</div>
+            )}
+
             <form onSubmit={handleUpload}>
               <div className="field">
                 <label>Title</label>
@@ -258,7 +296,6 @@ export default function DocumentsPage() {
           font-family: 'DM Mono', monospace;
         }
 
-        /* Category sidebar */
         .cat-sidebar {
           width: 160px;
           min-width: 160px;
@@ -302,7 +339,6 @@ export default function DocumentsPage() {
           border-radius: 10px;
         }
 
-        /* Main */
         .docs-main { flex: 1; min-width: 0; }
 
         .docs-header {
@@ -353,7 +389,6 @@ export default function DocumentsPage() {
 
         .empty-sub { font-size: 12px; color: #9a8e7e; margin: 0 0 24px; }
 
-        /* Document list */
         .doc-groups { display: flex; flex-direction: column; gap: 40px; }
 
         .group-title {
@@ -400,7 +435,6 @@ export default function DocumentsPage() {
         .doc-date { font-size: 11px; color: #bbb0a0; min-width: 100px; text-align: right; }
         .doc-arrow { font-size: 12px; color: #bbb0a0; }
 
-        /* Modal */
         .modal-overlay {
           position: fixed;
           inset: 0;
