@@ -55,8 +55,8 @@ export default function DocumentsPage() {
     load()
   }, [])
 
-  async function handleUpload(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleUpload(e?: React.FormEvent) {
+  e?.preventDefault()
     alert('projectId is: ' + projectId + ', file: ' + (fileRef.current?.files?.[0]?.name ?? 'none'))
     if (!fileRef.current?.files?.[0] || !projectId) return
     setUploading(true)
@@ -279,7 +279,7 @@ alert('Storage succeeded! Path: ' + filePath)
                 <button type="button" className="cancel-btn" onClick={() => setShowUpload(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="submit-btn" disabled={uploading}>
+                <button type="button" className="submit-btn" disabled={uploading} onClick={handleUpload as any}>
                   {uploading ? 'Uploading...' : 'Upload'}
                 </button>
               </div>
