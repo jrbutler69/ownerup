@@ -57,6 +57,7 @@ export default function DocumentsPage() {
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault()
+    alert('projectId is: ' + projectId + ', file: ' + (fileRef.current?.files?.[0]?.name ?? 'none'))
     if (!fileRef.current?.files?.[0] || !projectId) return
     setUploading(true)
     setUploadError(null)
