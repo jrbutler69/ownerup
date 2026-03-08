@@ -3,12 +3,11 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
+const DOC_CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices', 'Permits', 'Specs', 'Other']
+
 const NAV_ITEMS = [
   { id: 'home', label: 'Home', href: '/' },
-  { id: 'documents', label: 'Documents', href: '/documents' },
   { id: 'photos', label: 'Photos', href: '/photos' },
-  { id: 'budget', label: 'Budget', href: '/budget' },
-  { id: 'decisions', label: 'Decisions', href: '/decisions' },
   { id: 'team', label: 'Team', href: '/team' },
 ]
 
@@ -16,6 +15,8 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+
+  const isDocuments = pathname.startsWith('/documents')
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -35,7 +36,36 @@ export default function Sidebar() {
 
       <nav className="sidebar-nav">
         <div className="nav-spacer" />
-        {NAV_ITEMS.map(item => {
+
+        {/* Home */}
+        <button
+          className={`nav-item ${pathname === '/' ? 'active' : ''}`}
+          onClick={() => router.push('/')}
+        >
+          <span className="nav-label">Home</span>
+        </button>
+
+        {/* Documents with always-visible subcategories */}
+        <button
+          className={`nav-item ${isDocuments ? 'active' : ''}`}
+          onClick={() => router.push('/documents')}
+        >
+          <span className="nav-label">Documents</span>
+        </button>
+        <div className="doc-categories">
+          {DOC_CATEGORIES.map(cat => (
+            <button
+              key={cat}
+              className={`doc-cat-item ${pathname === '/documents' && isDocuments ? '' : ''}`}
+              onClick={() => router.push('/documents')}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Photos and Team */}
+        {NAV_ITEMS.filter(i => i.id !== 'home').map(item => {
           const active = pathname === item.href
           return (
             <button
@@ -135,6 +165,33 @@ export default function Sidebar() {
           color: #E8E3DC;
           background: rgba(201,185,154,0.07);
           border-left-color: #C9B99A;
+        }
+
+        .doc-categories {
+          display: flex;
+          flex-direction: column;
+          padding: 0 0 8px 0;
+        }
+
+        .doc-cat-item {
+          display: block;
+          padding: 6px 24px 6px 36px;
+          background: none;
+          border: none;
+          border-left: 2px solid transparent;
+          cursor: pointer;
+          text-align: left;
+          color: #4A4540;
+          font-family: 'DM Mono', monospace;
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          width: 100%;
+          transition: color 0.15s;
+        }
+
+        .doc-cat-item:hover {
+          color: #7A7268;
         }
 
         .sidebar-bottom {
