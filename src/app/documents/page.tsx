@@ -34,6 +34,7 @@ export default function DocumentsPage() {
     document_date: '',
   })
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -122,6 +123,23 @@ export default function DocumentsPage() {
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  async function handleDelete(doc: Document) {
+    if (!confirm(`Delete "${doc.title}"? This cannot be undone.`)) return
+    setDeletingId(doc.id)
+
+    // Remove from storage
+    const urlParts = doc.file_url.split('/documents/')
+    if (urlParts.length > 1) {
+      await supabase.storage.from('documents').remove([urlParts[1]])
+    }
+
+    // Remove from database
+    await supabase.from('documents').delete().eq('id', doc.id)
+
+    setDocuments(prev => prev.filter(d => d.id !== doc.id))
+    setDeletingId(null)
+  }
+
   const filtered = activeCategory === 'All'
     ? documents
     : documents.filter(d => d.category === activeCategory)
@@ -202,24 +220,33 @@ export default function DocumentsPage() {
                 <h2 className="group-title">{groupName}</h2>
                 <div className="doc-list">
                   {docs.map(doc => (
-                    <a
-                      key={doc.id}
-                      href={doc.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="doc-row"
-                    >
-                      <span className="doc-icon">◻</span>
-                      <span className="doc-title">{doc.title}</span>
-                      <span className="doc-version">{doc.version_label}</span>
-                      {doc.is_current && <span className="doc-current">current</span>}
-                      <span className="doc-date">
-                        {doc.document_date
-                          ? new Date(doc.document_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                          : '—'}
-                      </span>
-                      <span className="doc-arrow">→</span>
-                    </a>
+                    <div key={doc.id} className="doc-row-wrapper">
+                      <a
+                        href={doc.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="doc-row"
+                      >
+                        <span className="doc-icon">◻</span>
+                        <span className="doc-title">{doc.title}</span>
+                        <span className="doc-version">{doc.version_label}</span>
+                        {doc.is_current && <span className="doc-current">current</span>}
+                        <span className="doc-date">
+                          {doc.document_date
+                            ? new Date(doc.document_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : '—'}
+                        </span>
+                        <span className="doc-arrow">→</span>
+                      </a>
+                      <button
+                        className="doc-delete"
+                        onClick={() => handleDelete(doc)}
+                        disabled={deletingId === doc.id}
+                        title="Delete document"
+                      >
+                        {deletingId === doc.id ? '…' : '✕'}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -437,7 +464,14 @@ export default function DocumentsPage() {
 
         .doc-list { display: flex; flex-direction: column; gap: 2px; }
 
+        .doc-row-wrapper {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
         .doc-row {
+          flex: 1;
           display: flex;
           align-items: center;
           gap: 12px;
@@ -451,6 +485,21 @@ export default function DocumentsPage() {
         }
 
         .doc-row:hover { border-color: #c9b99a; background: #faf8f5; }
+
+        .doc-delete {
+          opacity: 0;
+          background: none;
+          border: none;
+          color: #c0532a;
+          font-size: 11px;
+          cursor: pointer;
+          padding: 6px 8px;
+          transition: opacity 0.15s;
+          font-family: 'DM Mono', monospace;
+        }
+
+        .doc-row-wrapper:hover .doc-delete { opacity: 1; }
+        .doc-delete:hover { color: #a03010; }
 
         .doc-icon { font-size: 12px; color: #9a8e7e; }
         .doc-title { flex: 1; font-size: 13px; color: #1c1a17; }
