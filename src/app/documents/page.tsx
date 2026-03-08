@@ -57,7 +57,6 @@ export default function DocumentsPage() {
 
   async function handleUpload(e?: React.FormEvent) {
   e?.preventDefault()
-    alert('projectId is: ' + projectId + ', file: ' + (fileRef.current?.files?.[0]?.name ?? 'none'))
     if (!fileRef.current?.files?.[0] || !projectId) return
     setUploading(true)
     setUploadError(null)
@@ -76,7 +75,6 @@ if (storageError) {
   setUploading(false)
   return
 }
-alert('Storage succeeded! Path: ' + filePath)
 
     const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath)
 
@@ -96,7 +94,6 @@ alert('Storage succeeded! Path: ' + filePath)
       .select()
       .single()
       if (dbError) {
-  alert('DB error: ' + JSON.stringify(dbError))
   setUploading(false)
   return
 }
