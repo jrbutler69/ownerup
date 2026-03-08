@@ -102,7 +102,7 @@ alert('Storage succeeded! Path: ' + filePath)
 }
 
     if (dbError) {
-      setUploadError('Database error: ' + dbError.message)
+      setUploadError('Database error: ' + JSON.stringify(dbError))
       setUploading(false)
       return
     }
