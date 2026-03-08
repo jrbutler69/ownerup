@@ -4,11 +4,14 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
 const CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices', 'Permits', 'Specs', 'Other']
+const SUBCATEGORY_CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices']
+const SUBCATEGORIES = ['Architect', 'Engineers', 'Designers', 'Contractors', 'Other']
 
 type Document = {
   id: string
   title: string
   category: string
+  subcategory: string | null
   version_label: string
   document_date: string
   upload_date: string
@@ -23,7 +26,13 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [projectId, setProjectId] = useState<string | null>(null)
-  const [form, setForm] = useState({ title: '', category: 'Contracts', version_label: 'v1', document_date: '' })
+  const [form, setForm] = useState({
+    title: '',
+    category: 'Contracts',
+    subcategory: 'Architect',
+    version_label: 'v1',
+    document_date: '',
+  })
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
@@ -55,8 +64,10 @@ export default function DocumentsPage() {
     load()
   }, [])
 
+  const needsSubcategory = SUBCATEGORY_CATEGORIES.includes(form.category)
+
   async function handleUpload(e?: React.FormEvent) {
-  e?.preventDefault()
+    e?.preventDefault()
     if (!fileRef.current?.files?.[0] || !projectId) return
     setUploading(true)
     setUploadError(null)
@@ -67,14 +78,14 @@ export default function DocumentsPage() {
     const filePath = `${projectId}/${fileName}`
 
     const { error: storageError } = await supabase.storage
-  .from('documents')
-  .upload(filePath, file)
+      .from('documents')
+      .upload(filePath, file)
 
-if (storageError) {
-  setUploadError('Storage upload failed: ' + JSON.stringify(storageError))
-  setUploading(false)
-  return
-}
+    if (storageError) {
+      setUploadError('Storage upload failed: ' + JSON.stringify(storageError))
+      setUploading(false)
+      return
+    }
 
     const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath)
 
@@ -84,6 +95,7 @@ if (storageError) {
         project_id: projectId,
         title: form.title,
         category: form.category,
+        subcategory: needsSubcategory ? form.subcategory : null,
         version_label: form.version_label,
         version_group: crypto.randomUUID(),
         document_date: form.document_date || null,
@@ -93,10 +105,6 @@ if (storageError) {
       })
       .select()
       .single()
-      if (dbError) {
-  setUploading(false)
-  return
-}
 
     if (dbError) {
       setUploadError('Database error: ' + JSON.stringify(dbError))
@@ -110,7 +118,7 @@ if (storageError) {
 
     setUploading(false)
     setShowUpload(false)
-    setForm({ title: '', category: 'Contracts', version_label: 'v1', document_date: '' })
+    setForm({ title: '', category: 'Contracts', subcategory: 'Architect', version_label: 'v1', document_date: '' })
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -118,15 +126,31 @@ if (storageError) {
     ? documents
     : documents.filter(d => d.category === activeCategory)
 
-  const grouped = CATEGORIES.reduce((acc, cat) => {
-    const docs = filtered.filter(d => d.category === cat)
-    if (docs.length > 0) acc[cat] = docs
-    return acc
-  }, {} as Record<string, Document[]>)
+  function groupDocuments(docs: Document[]) {
+    const category = activeCategory
+    if (category !== 'All' && SUBCATEGORY_CATEGORIES.includes(category)) {
+      const groups: Record<string, Document[]> = {}
+      for (const sub of SUBCATEGORIES) {
+        const subDocs = docs.filter(d => d.subcategory === sub)
+        if (subDocs.length > 0) groups[sub] = subDocs
+      }
+      const unsorted = docs.filter(d => !d.subcategory)
+      if (unsorted.length > 0) groups['General'] = unsorted
+      return groups
+    } else {
+      const groups: Record<string, Document[]> = {}
+      for (const cat of CATEGORIES) {
+        const catDocs = docs.filter(d => d.category === cat)
+        if (catDocs.length > 0) groups[cat] = catDocs
+      }
+      return groups
+    }
+  }
+
+  const grouped = groupDocuments(filtered)
 
   return (
     <div className="docs-root">
-      {/* Category sidebar */}
       <aside className="cat-sidebar">
         <p className="cat-heading">Categories</p>
         <button
@@ -151,10 +175,11 @@ if (storageError) {
         })}
       </aside>
 
-      {/* Main */}
       <div className="docs-main">
         <div className="docs-header">
-          <h1 className="docs-title">Documents</h1>
+          <h1 className="docs-title">
+            {activeCategory === 'All' ? 'Documents' : activeCategory}
+          </h1>
           <button className="upload-btn" onClick={() => setShowUpload(true)}>
             + Upload
           </button>
@@ -172,9 +197,9 @@ if (storageError) {
           <p className="state-msg">No documents in this category.</p>
         ) : (
           <div className="doc-groups">
-            {Object.entries(grouped).map(([cat, docs]) => (
-              <div key={cat} className="doc-group">
-                <h2 className="group-title">{cat}</h2>
+            {Object.entries(grouped).map(([groupName, docs]) => (
+              <div key={groupName} className="doc-group">
+                <h2 className="group-title">{groupName}</h2>
                 <div className="doc-list">
                   {docs.map(doc => (
                     <a
@@ -203,7 +228,6 @@ if (storageError) {
         )}
       </div>
 
-      {/* Upload modal */}
       {showUpload && (
         <div className="modal-overlay" onClick={() => setShowUpload(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -242,7 +266,7 @@ if (storageError) {
                   <label>Category</label>
                   <select
                     value={form.category}
-                    onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                    onChange={e => setForm(f => ({ ...f, category: e.target.value, subcategory: 'Architect' }))}
                   >
                     {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                   </select>
@@ -257,6 +281,18 @@ if (storageError) {
                   />
                 </div>
               </div>
+
+              {needsSubcategory && (
+                <div className="field">
+                  <label>Subcategory</label>
+                  <select
+                    value={form.subcategory}
+                    onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))}
+                  >
+                    {SUBCATEGORIES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+              )}
 
               <div className="field">
                 <label>Document Date (optional)</label>
@@ -276,7 +312,7 @@ if (storageError) {
                 <button type="button" className="cancel-btn" onClick={() => setShowUpload(false)}>
                   Cancel
                 </button>
-                <button type="button" className="submit-btn" disabled={uploading} onClick={handleUpload as any}>
+                <button type="submit" className="submit-btn" disabled={uploading}>
                   {uploading ? 'Uploading...' : 'Upload'}
                 </button>
               </div>
