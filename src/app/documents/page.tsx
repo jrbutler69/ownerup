@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
 const CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices', 'Permits', 'Specs', 'Other']
@@ -20,15 +21,19 @@ type Document = {
 }
 
 export default function DocumentsPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const urlCategory = searchParams.get('category')
+
   const [documents, setDocuments] = useState<Document[]>([])
-  const [activeCategory, setActiveCategory] = useState('All')
+  const [activeCategory, setActiveCategory] = useState(urlCategory ?? 'All')
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [projectId, setProjectId] = useState<string | null>(null)
   const [form, setForm] = useState({
     title: '',
-    category: 'Contracts',
+    category: urlCategory && CATEGORIES.includes(urlCategory) ? urlCategory : 'Contracts',
     subcategory: 'Architect',
     version_label: 'v1',
     document_date: '',
@@ -37,6 +42,11 @@ export default function DocumentsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
+
+  // Sync activeCategory when URL param changes
+  useEffect(() => {
+    setActiveCategory(urlCategory ?? 'All')
+  }, [urlCategory])
 
   useEffect(() => {
     async function load() {
@@ -66,6 +76,14 @@ export default function DocumentsPage() {
   }, [])
 
   const needsSubcategory = SUBCATEGORY_CATEGORIES.includes(form.category)
+
+  function handleCategoryClick(cat: string) {
+    if (cat === 'All') {
+      router.push('/documents')
+    } else {
+      router.push(`/documents?category=${encodeURIComponent(cat)}`)
+    }
+  }
 
   async function handleUpload(e?: React.FormEvent) {
     e?.preventDefault()
@@ -127,15 +145,12 @@ export default function DocumentsPage() {
     if (!confirm(`Delete "${doc.title}"? This cannot be undone.`)) return
     setDeletingId(doc.id)
 
-    // Remove from storage
     const urlParts = doc.file_url.split('/documents/')
     if (urlParts.length > 1) {
       await supabase.storage.from('documents').remove([urlParts[1]])
     }
 
-    // Remove from database
     await supabase.from('documents').delete().eq('id', doc.id)
-
     setDocuments(prev => prev.filter(d => d.id !== doc.id))
     setDeletingId(null)
   }
@@ -145,8 +160,7 @@ export default function DocumentsPage() {
     : documents.filter(d => d.category === activeCategory)
 
   function groupDocuments(docs: Document[]) {
-    const category = activeCategory
-    if (category !== 'All' && SUBCATEGORY_CATEGORIES.includes(category)) {
+    if (activeCategory !== 'All' && SUBCATEGORY_CATEGORIES.includes(activeCategory)) {
       const groups: Record<string, Document[]> = {}
       for (const sub of SUBCATEGORIES) {
         const subDocs = docs.filter(d => d.subcategory === sub)
@@ -173,7 +187,7 @@ export default function DocumentsPage() {
         <p className="cat-heading">Categories</p>
         <button
           className={`cat-item ${activeCategory === 'All' ? 'active' : ''}`}
-          onClick={() => setActiveCategory('All')}
+          onClick={() => handleCategoryClick('All')}
         >
           All
           <span className="cat-count">{documents.length}</span>
@@ -184,7 +198,7 @@ export default function DocumentsPage() {
             <button
               key={cat}
               className={`cat-item ${activeCategory === cat ? 'active' : ''}`}
-              onClick={() => setActiveCategory(cat)}
+              onClick={() => handleCategoryClick(cat)}
             >
               {cat}
               {count > 0 && <span className="cat-count">{count}</span>}

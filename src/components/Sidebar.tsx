@@ -1,22 +1,18 @@
 'use client'
 
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
 const DOC_CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices', 'Permits', 'Specs', 'Other']
 
-const NAV_ITEMS = [
-  { id: 'home', label: 'Home', href: '/' },
-  { id: 'photos', label: 'Photos', href: '/photos' },
-  { id: 'team', label: 'Team', href: '/team' },
-]
-
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
 
   const isDocuments = pathname.startsWith('/documents')
+  const activeCategory = searchParams.get('category')
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -45,38 +41,42 @@ export default function Sidebar() {
           <span className="nav-label">Home</span>
         </button>
 
-        {/* Documents with always-visible subcategories */}
+        {/* Documents */}
         <button
-          className={`nav-item ${isDocuments ? 'active' : ''}`}
+          className={`nav-item ${isDocuments && !activeCategory ? 'active' : ''}`}
           onClick={() => router.push('/documents')}
         >
           <span className="nav-label">Documents</span>
         </button>
+
+        {/* Document categories */}
         <div className="doc-categories">
           {DOC_CATEGORIES.map(cat => (
             <button
               key={cat}
-              className={`doc-cat-item ${pathname === '/documents' && isDocuments ? '' : ''}`}
-              onClick={() => router.push('/documents')}
+              className={`doc-cat-item ${activeCategory === cat ? 'cat-active' : ''}`}
+              onClick={() => router.push(`/documents?category=${encodeURIComponent(cat)}`)}
             >
               {cat}
             </button>
           ))}
         </div>
 
-        {/* Photos and Team */}
-        {NAV_ITEMS.filter(i => i.id !== 'home').map(item => {
-          const active = pathname === item.href
-          return (
-            <button
-              key={item.id}
-              className={`nav-item ${active ? 'active' : ''}`}
-              onClick={() => router.push(item.href)}
-            >
-              <span className="nav-label">{item.label}</span>
-            </button>
-          )
-        })}
+        {/* Photos */}
+        <button
+          className={`nav-item ${pathname === '/photos' ? 'active' : ''}`}
+          onClick={() => router.push('/photos')}
+        >
+          <span className="nav-label">Photos</span>
+        </button>
+
+        {/* Team */}
+        <button
+          className={`nav-item ${pathname === '/team' ? 'active' : ''}`}
+          onClick={() => router.push('/team')}
+        >
+          <span className="nav-label">Team</span>
+        </button>
       </nav>
 
       <div className="sidebar-bottom">
@@ -157,9 +157,7 @@ export default function Sidebar() {
           width: 100%;
         }
 
-        .nav-item:hover {
-          color: #9E9890;
-        }
+        .nav-item:hover { color: #9E9890; }
 
         .nav-item.active {
           color: #E8E3DC;
@@ -190,8 +188,11 @@ export default function Sidebar() {
           transition: color 0.15s;
         }
 
-        .doc-cat-item:hover {
-          color: #7A7268;
+        .doc-cat-item:hover { color: #7A7268; }
+
+        .doc-cat-item.cat-active {
+          color: #C9B99A;
+          border-left-color: #C9B99A;
         }
 
         .sidebar-bottom {
@@ -212,9 +213,7 @@ export default function Sidebar() {
           transition: color 0.15s;
         }
 
-        .sign-out:hover {
-          color: #6A6358;
-        }
+        .sign-out:hover { color: #6A6358; }
       `}</style>
     </aside>
   )
