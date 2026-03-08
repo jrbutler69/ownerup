@@ -103,7 +103,7 @@ export default function Sidebar() {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 170px 24px 28px;
+          padding: 120px 24px 28px;
           border-bottom: 1px solid rgba(255,255,255,0.06);
         }
 
