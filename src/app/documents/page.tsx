@@ -71,7 +71,7 @@ export default function DocumentsPage() {
   .upload(filePath, file)
 
 if (storageError) {
-  alert('Storage error: ' + JSON.stringify(storageError))
+  setUploadError('Storage upload failed: ' + JSON.stringify(storageError))
   setUploading(false)
   return
 }
