@@ -27,7 +27,10 @@ export default function Sidebar() {
             <rect x="1" y="1" width="8" height="8"/>
           </svg>
         </div>
-        <span className="brand-name">OwnerUp</span>
+        <div className="brand-text">
+          <span className="brand-name">OwnerUp</span>
+          <span className="brand-tagline">The Construction Dashboard for Owners</span>
+        </div>
       </div>
 
       <nav className="sidebar-nav">
@@ -141,7 +144,21 @@ export default function Sidebar() {
           font-family: 'DM Mono', monospace;
           font-weight: 400;
         }
+        .brand-text {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+        }
 
+        .brand-tagline {
+          font-size: 8px;
+          color: rgba(201,185,154,0.5);
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          font-family: 'DM Mono', monospace;
+          font-weight: 300;
+          line-height: 1.4;
+        }
         .sidebar-nav {
           display: flex;
           flex-direction: column;
