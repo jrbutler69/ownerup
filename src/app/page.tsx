@@ -10,10 +10,9 @@ export default function HomePage() {
   const [data, setData] = useState<{
     documents: any[]
     photos: any[]
-    budget: any[]
-    decisions: any[]
+    renderings: any[]
     timeline: any[]
-  }>({ documents: [], photos: [], budget: [], decisions: [], timeline: [] })
+  }>({ documents: [], photos: [], renderings: [], timeline: [] })
 
   const supabase = createClient()
   const router = useRouter()
@@ -32,19 +31,17 @@ export default function HomePage() {
       if (!projects?.length) { setLoading(false); return }
       const pid = projects[0].id
 
-      const [docsRes, photosRes, budgetRes, decisionsRes, timelineRes] = await Promise.all([
+      const [docsRes, photosRes, renderingsRes, timelineRes] = await Promise.all([
         supabase.from('documents').select('*').eq('project_id', pid).eq('is_current', true).order('upload_date', { ascending: false }).limit(4),
         supabase.from('photos').select('*').eq('project_id', pid).order('taken_at', { ascending: false }).limit(6),
-        supabase.from('current_budget').select('*').eq('project_id', pid),
-        supabase.from('decisions').select('*').eq('project_id', pid).order('date', { ascending: false }).limit(4),
+        supabase.from('renderings').select('*').eq('project_id', pid).order('uploaded_at', { ascending: false }).limit(6),
         supabase.from('timeline_feed').select('*').eq('project_id', pid).order('event_timestamp', { ascending: false }).limit(20),
       ])
 
       setData({
         documents: docsRes.data ?? [],
         photos: photosRes.data ?? [],
-        budget: budgetRes.data ?? [],
-        decisions: decisionsRes.data ?? [],
+        renderings: renderingsRes.data ?? [],
         timeline: timelineRes.data ?? [],
       })
       setLoading(false)
@@ -117,14 +114,19 @@ export default function HomePage() {
 }
 
 function OverviewContent({ data, loading, router }: { data: any; loading: boolean; router: any }) {
-  const totalBudget = data.budget.reduce((sum: number, row: any) => sum + (row.amount ?? 0), 0)
-
-  function formatCurrency(n: number) {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
-  }
 
   function formatDate(s: string) {
     return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
+  // Hardcoded upcoming items — will be wired to DB later
+  const upcoming = [
+    { date: '2026-03-25', label: 'On-site Meeting' },
+    { date: '2026-04-06', label: 'Septic drawings due' },
+  ]
+
+  function formatUpcomingDate(s: string) {
+    return new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })
   }
 
   return (
@@ -149,7 +151,7 @@ function OverviewContent({ data, loading, router }: { data: any; loading: boolea
           ))}
         </div>
 
-        {/* PHOTOS */}
+        {/* RECENT PHOTOS */}
         <div className="section section-right">
           <div className="section-header">
             <span className="section-title">Recent Photos</span>
@@ -170,50 +172,38 @@ function OverviewContent({ data, loading, router }: { data: any; loading: boolea
           )}
         </div>
 
-        {/* BUDGET */}
+        {/* UPCOMING */}
         <div className="section section-left">
           <div className="section-header">
-            <span className="section-title">Budget</span>
-            <button className="view-all" onClick={() => router.push('/budget')}>View all →</button>
+            <span className="section-title">Upcoming</span>
           </div>
-          {loading ? (
-            <p className="empty-state">Loading…</p>
-          ) : data.budget.length === 0 ? (
-            <p className="empty-state">No budget entries yet</p>
-          ) : (
-            <>
-              {data.budget.slice(0, 3).map((row: any) => (
-                <div key={row.id} className="row">
-                  <span className="row-name">{row.name}</span>
-                  <span className="row-meta">{formatCurrency(row.amount)}</span>
-                </div>
-              ))}
-              <div className="row budget-total-row">
-                <span className="row-name" style={{ color: '#1A1814' }}>Total</span>
-                <div className="budget-total-right">
-                  <span className="budget-total">{formatCurrency(totalBudget)}</span>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* DECISIONS */}
-        <div className="section section-right">
-          <div className="section-header">
-            <span className="section-title">Recent Decisions</span>
-            <button className="view-all" onClick={() => router.push('/decisions')}>View all →</button>
-          </div>
-          {loading ? (
-            <p className="empty-state">Loading…</p>
-          ) : data.decisions.length === 0 ? (
-            <p className="empty-state">No decisions logged yet</p>
-          ) : data.decisions.map((d: any) => (
-            <div key={d.id} className="row decision-row">
-              <span className="decision-name">{d.title}</span>
-              <span className="row-meta">{formatDate(d.date)}</span>
+          {upcoming.map((item, i) => (
+            <div key={i} className="row">
+              <span className="row-name">{item.label}</span>
+              <span className="row-meta">{formatUpcomingDate(item.date)}</span>
             </div>
           ))}
+        </div>
+
+        {/* RECENT RENDERINGS */}
+        <div className="section section-right">
+          <div className="section-header">
+            <span className="section-title">Recent Renderings</span>
+            <button className="view-all" onClick={() => router.push('/renderings')}>View all →</button>
+          </div>
+          {loading ? (
+            <p className="empty-state">Loading…</p>
+          ) : data.renderings.length === 0 ? (
+            <p className="empty-state">No renderings yet</p>
+          ) : (
+            <div className="photo-grid">
+              {data.renderings.map((r: any) => (
+                <div key={r.id} className="photo-thumb" onClick={() => router.push('/renderings')}>
+                  <img src={r.image_url} alt={r.caption || 'Rendering'} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </div>
@@ -262,13 +252,6 @@ function OverviewContent({ data, loading, router }: { data: any; loading: boolea
         a.row:hover .row-name { color: #8B6F4E; }
 
         .row-meta { font-size: 9px; letter-spacing: 0.08em; color: #B0A898; white-space: nowrap; flex-shrink: 0; }
-
-        .decision-row { align-items: flex-start; }
-        .decision-name { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 400; color: #1A1814; line-height: 1.3; }
-
-        .budget-total-row { border-bottom: none; padding-top: 14px; margin-top: 4px; border-top: 1px solid #D8D2C8; }
-        .budget-total-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-        .budget-total { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 300; color: #1A1814; }
 
         .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
         .photo-thumb { aspect-ratio: 1; overflow: hidden; background: #E8E3DC; cursor: pointer; }
