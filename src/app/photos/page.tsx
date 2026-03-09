@@ -86,6 +86,7 @@ export default function PhotosPage() {
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [openVisit, setOpenVisit] = useState<string | null>(null)
+  const [visitDate, setVisitDate] = useState(() => new Date().toISOString().split('T')[0])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -127,7 +128,7 @@ export default function PhotosPage() {
         .insert({
           project_id: projectId,
           image_url: publicUrl,
-          taken_at: new Date().toISOString(),
+          taken_at: new Date(visitDate + 'T12:00:00').toISOString(),
           uploaded_at: new Date().toISOString(),
           caption: null,
         })
@@ -322,14 +323,27 @@ export default function PhotosPage() {
 
       {/* Upload zone — always visible unless inside a visit */}
       {!openVisitGroup && (
-        <div className="upload-zone" onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}>
-          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
-            onChange={e => e.target.files && handleUpload(e.target.files)} />
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 6 }}>
-            {uploading ? 'Uploading…' : 'Drop photos here or click to upload'}
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>
+              Site visit date
+            </span>
+            <input
+              type="date"
+              value={visitDate}
+              onChange={e => setVisitDate(e.target.value)}
+              style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none' }}
+            />
           </div>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E' }}>
-            JPG, PNG, HEIC · multiple files supported
+          <div className="upload-zone" onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}>
+            <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
+              onChange={e => e.target.files && handleUpload(e.target.files)} />
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 6 }}>
+              {uploading ? 'Uploading…' : 'Drop photos here or click to upload'}
+            </div>
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E' }}>
+              JPG, PNG, HEIC · multiple files supported
+            </div>
           </div>
         </div>
       )}
