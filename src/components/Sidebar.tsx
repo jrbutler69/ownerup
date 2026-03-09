@@ -70,6 +70,14 @@ export default function Sidebar() {
           <span className="nav-label">Photos</span>
         </button>
 
+        {/* Renderings */}
+        <button
+          className={`nav-item ${pathname === '/renderings' ? 'active' : ''}`}
+          onClick={() => router.push('/renderings')}
+        >
+          <span className="nav-label">Renderings</span>
+        </button>
+
         {/* Team */}
         <button
           className={`nav-item ${pathname === '/team' ? 'active' : ''}`}
