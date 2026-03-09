@@ -323,8 +323,22 @@ export default function PhotosPage() {
 
       {/* Upload zone — always visible unless inside a visit */}
       {!openVisitGroup && (
-        <div style={{ marginBottom: 40 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <div
+          className="upload-zone"
+          style={{ marginBottom: 40 }}
+          onDrop={handleDrop}
+          onDragOver={e => e.preventDefault()}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
+            onChange={e => e.target.files && handleUpload(e.target.files)} />
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 16 }}>
+            {uploading ? 'Uploading…' : 'Drop photos here or click to upload'}
+          </div>
+          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E', marginBottom: 16 }}>
+            JPG, PNG, HEIC · multiple files supported
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }} onClick={e => e.stopPropagation()}>
             <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>
               Site visit date
             </span>
@@ -334,16 +348,6 @@ export default function PhotosPage() {
               onChange={e => setVisitDate(e.target.value)}
               style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none' }}
             />
-          </div>
-          <div className="upload-zone" onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}>
-            <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
-              onChange={e => e.target.files && handleUpload(e.target.files)} />
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 6 }}>
-              {uploading ? 'Uploading…' : 'Drop photos here or click to upload'}
-            </div>
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E' }}>
-              JPG, PNG, HEIC · multiple files supported
-            </div>
           </div>
         </div>
       )}
