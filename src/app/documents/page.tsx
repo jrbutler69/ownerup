@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
-const CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices', 'Permits', 'Specs', 'Other']
+const CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices', 'Permits', 'Insurance', 'Specs', 'Other']
 const SUBCATEGORY_CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices']
 const SUBCATEGORIES = ['Architect', 'Engineers', 'Designers', 'Contractors', 'Other']
 
