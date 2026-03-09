@@ -163,6 +163,11 @@ export default function DocumentsPage() {
 
     if (newDocs.length) setDocuments(prev => [...newDocs, ...prev])
     setUploading(false)
+
+    const hasErrors = queue.some(f => f.status === 'error')
+    if (!hasErrors) {
+      setTimeout(() => { setShowUpload(false); setQueue([]) }, 800)
+    }
   }
 
   async function handleDelete(doc: Document) {
