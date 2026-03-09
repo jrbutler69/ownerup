@@ -43,7 +43,6 @@ export default function DocumentsPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
-  // Sync activeCategory when URL param changes
   useEffect(() => {
     setActiveCategory(urlCategory ?? 'All')
   }, [urlCategory])
@@ -76,14 +75,6 @@ export default function DocumentsPage() {
   }, [])
 
   const needsSubcategory = SUBCATEGORY_CATEGORIES.includes(form.category)
-
-  function handleCategoryClick(cat: string) {
-    if (cat === 'All') {
-      router.push('/documents')
-    } else {
-      router.push(`/documents?category=${encodeURIComponent(cat)}`)
-    }
-  }
 
   async function handleUpload(e?: React.FormEvent) {
     e?.preventDefault()
@@ -183,91 +174,65 @@ export default function DocumentsPage() {
 
   return (
     <div className="docs-root">
-      <aside className="cat-sidebar">
-        <p className="cat-heading">Categories</p>
-        <button
-          className={`cat-item ${activeCategory === 'All' ? 'active' : ''}`}
-          onClick={() => handleCategoryClick('All')}
-        >
-          All
-          <span className="cat-count">{documents.length}</span>
+      <div className="docs-header">
+        <h1 className="docs-title">
+          {activeCategory === 'All' ? 'Documents' : activeCategory}
+        </h1>
+        <button className="upload-btn" onClick={() => setShowUpload(true)}>
+          + Upload
         </button>
-        {CATEGORIES.map(cat => {
-          const count = documents.filter(d => d.category === cat).length
-          return (
-            <button
-              key={cat}
-              className={`cat-item ${activeCategory === cat ? 'active' : ''}`}
-              onClick={() => handleCategoryClick(cat)}
-            >
-              {cat}
-              {count > 0 && <span className="cat-count">{count}</span>}
-            </button>
-          )
-        })}
-      </aside>
-
-      <div className="docs-main">
-        <div className="docs-header">
-          <h1 className="docs-title">
-            {activeCategory === 'All' ? 'Documents' : activeCategory}
-          </h1>
-          <button className="upload-btn" onClick={() => setShowUpload(true)}>
-            + Upload
-          </button>
-        </div>
-
-        {loading ? (
-          <p className="state-msg">Loading...</p>
-        ) : documents.length === 0 ? (
-          <div className="empty-state">
-            <p className="empty-title">No documents yet</p>
-            <p className="empty-sub">Upload your first document to get started.</p>
-            <button className="upload-btn" onClick={() => setShowUpload(true)}>+ Upload document</button>
-          </div>
-        ) : filtered.length === 0 ? (
-          <p className="state-msg">No documents in this category.</p>
-        ) : (
-          <div className="doc-groups">
-            {Object.entries(grouped).map(([groupName, docs]) => (
-              <div key={groupName} className="doc-group">
-                <h2 className="group-title">{groupName}</h2>
-                <div className="doc-list">
-                  {docs.map(doc => (
-                    <div key={doc.id} className="doc-row-wrapper">
-                      <a
-                        href={doc.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="doc-row"
-                      >
-                        <span className="doc-icon">◻</span>
-                        <span className="doc-title">{doc.title}</span>
-                        <span className="doc-version">{doc.version_label}</span>
-                        {doc.is_current && <span className="doc-current">current</span>}
-                        <span className="doc-date">
-                          {doc.document_date
-                            ? new Date(doc.document_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                            : '—'}
-                        </span>
-                        <span className="doc-arrow">→</span>
-                      </a>
-                      <button
-                        className="doc-delete"
-                        onClick={() => handleDelete(doc)}
-                        disabled={deletingId === doc.id}
-                        title="Delete document"
-                      >
-                        {deletingId === doc.id ? '…' : '✕'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
+
+      {loading ? (
+        <p className="state-msg">Loading...</p>
+      ) : documents.length === 0 ? (
+        <div className="empty-state">
+          <p className="empty-title">No documents yet</p>
+          <p className="empty-sub">Upload your first document to get started.</p>
+          <button className="upload-btn" onClick={() => setShowUpload(true)}>+ Upload document</button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <p className="state-msg">No documents in this category.</p>
+      ) : (
+        <div className="doc-groups">
+          {Object.entries(grouped).map(([groupName, docs]) => (
+            <div key={groupName} className="doc-group">
+              <h2 className="group-title">{groupName}</h2>
+              <div className="doc-list">
+                {docs.map(doc => (
+                  <div key={doc.id} className="doc-row-wrapper">
+                    <a
+                      href={doc.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="doc-row"
+                    >
+                      <span className="doc-icon">◻</span>
+                      <span className="doc-title">{doc.title}</span>
+                      <span className="doc-version">{doc.version_label}</span>
+                      {doc.is_current && <span className="doc-current">current</span>}
+                      <span className="doc-date">
+                        {doc.document_date
+                          ? new Date(doc.document_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : '—'}
+                      </span>
+                      <span className="doc-arrow">→</span>
+                    </a>
+                    <button
+                      className="doc-delete"
+                      onClick={() => handleDelete(doc)}
+                      disabled={deletingId === doc.id}
+                      title="Delete document"
+                    >
+                      {deletingId === doc.id ? '…' : '✕'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {showUpload && (
         <div className="modal-overlay" onClick={() => setShowUpload(false)}>
@@ -366,55 +331,8 @@ export default function DocumentsPage() {
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=DM+Mono:wght@300;400&display=swap');
 
         .docs-root {
-          display: flex;
-          gap: 48px;
           font-family: 'DM Mono', monospace;
         }
-
-        .cat-sidebar {
-          width: 160px;
-          min-width: 160px;
-          padding-top: 4px;
-        }
-
-        .cat-heading {
-          font-size: 9px;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-          color: #9a8e7e;
-          margin: 0 0 12px;
-        }
-
-        .cat-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          width: 100%;
-          padding: 8px 10px;
-          background: none;
-          border: none;
-          font-family: 'DM Mono', monospace;
-          font-size: 11px;
-          color: #7a7060;
-          cursor: pointer;
-          text-align: left;
-          border-radius: 2px;
-          transition: all 0.15s;
-          letter-spacing: 0.05em;
-        }
-
-        .cat-item:hover { color: #1c1a17; background: rgba(0,0,0,0.04); }
-        .cat-item.active { color: #1c1a17; background: rgba(0,0,0,0.06); font-weight: 400; }
-
-        .cat-count {
-          font-size: 10px;
-          color: #bbb0a0;
-          background: #f0ebe4;
-          padding: 1px 6px;
-          border-radius: 10px;
-        }
-
-        .docs-main { flex: 1; min-width: 0; }
 
         .docs-header {
           display: flex;
@@ -449,17 +367,11 @@ export default function DocumentsPage() {
 
         .state-msg { font-size: 13px; color: #bbb0a0; font-style: italic; }
 
-        .empty-state {
-          padding: 60px 0;
-          text-align: center;
-        }
+        .empty-state { padding: 60px 0; text-align: center; }
 
         .empty-title {
           font-family: 'Cormorant Garamond', serif;
-          font-size: 24px;
-          font-weight: 300;
-          color: #1c1a17;
-          margin: 0 0 8px;
+          font-size: 24px; font-weight: 300; color: #1c1a17; margin: 0 0 8px;
         }
 
         .empty-sub { font-size: 12px; color: #9a8e7e; margin: 0 0 24px; }
