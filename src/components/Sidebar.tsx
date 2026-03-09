@@ -29,7 +29,7 @@ export default function Sidebar() {
         </div>
         <div className="brand-text">
           <span className="brand-name">OwnerUp</span>
-          <span className="brand-tagline">The Construction Dashboard for Owners</span>
+          <span className="brand-tagline">Construction Dashboard</span>
         </div>
       </div>
 
@@ -151,7 +151,7 @@ export default function Sidebar() {
         }
 
         .brand-tagline {
-          font-size: 8px;
+          font-size: 10px;
           color: rgba(201,185,154,0.5);
           letter-spacing: 0.12em;
           text-transform: uppercase;
