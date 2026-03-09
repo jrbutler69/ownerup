@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
 const CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices', 'Permits', 'Specs', 'Other']
@@ -20,127 +20,163 @@ type Document = {
   is_current: boolean
 }
 
+type QueuedFile = {
+  id: string
+  file: File
+  title: string
+  status: 'pending' | 'uploading' | 'done' | 'error'
+  error?: string
+}
+
+function cleanTitle(filename: string) {
+  return filename
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[-_]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export default function DocumentsPage() {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const urlCategory = searchParams.get('category')
 
   const [documents, setDocuments] = useState<Document[]>([])
   const [activeCategory, setActiveCategory] = useState(urlCategory ?? 'All')
   const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [projectId, setProjectId] = useState<string | null>(null)
-  const [form, setForm] = useState({
-    title: '',
-    category: urlCategory && CATEGORIES.includes(urlCategory) ? urlCategory : 'Contracts',
-    subcategory: 'Architect',
-    version_label: 'v1',
-    document_date: '',
-  })
-  const [uploadError, setUploadError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [dragOver, setDragOver] = useState(false)
+
+  const [batchCategory, setBatchCategory] = useState(
+    urlCategory && CATEGORIES.includes(urlCategory) ? urlCategory : 'Contracts'
+  )
+  const [batchSubcategory, setBatchSubcategory] = useState('Architect')
+  const [batchVersion, setBatchVersion] = useState('v1')
+  const [queue, setQueue] = useState<QueuedFile[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
-  useEffect(() => {
-    setActiveCategory(urlCategory ?? 'All')
-  }, [urlCategory])
+  useEffect(() => { setActiveCategory(urlCategory ?? 'All') }, [urlCategory])
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
       const { data: projects } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1)
-
+        .from('projects').select('id').eq('user_id', user.id).limit(1)
       if (!projects?.length) return
       const pid = projects[0].id
       setProjectId(pid)
-
       const { data: docs } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('project_id', pid)
+        .from('documents').select('*').eq('project_id', pid)
         .order('upload_date', { ascending: false })
-
       setDocuments(docs ?? [])
       setLoading(false)
     }
     load()
   }, [])
 
-  const needsSubcategory = SUBCATEGORY_CATEGORIES.includes(form.category)
+  function addFiles(files: FileList | File[]) {
+    const newItems: QueuedFile[] = Array.from(files).map(f => ({
+      id: crypto.randomUUID(),
+      file: f,
+      title: cleanTitle(f.name),
+      status: 'pending',
+    }))
+    setQueue(prev => [...prev, ...newItems])
+  }
 
-  async function handleUpload(e?: React.FormEvent) {
-    e?.preventDefault()
-    if (!fileRef.current?.files?.[0] || !projectId) return
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
+  }, [])
+
+  const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragOver(true) }, [])
+  const onDragLeave = useCallback(() => setDragOver(false), [])
+
+  function updateTitle(id: string, title: string) {
+    setQueue(prev => prev.map(f => f.id === id ? { ...f, title } : f))
+  }
+
+  function removeFromQueue(id: string) {
+    setQueue(prev => prev.filter(f => f.id !== id))
+  }
+
+  async function handleUploadAll() {
+    if (!projectId || queue.filter(f => f.status === 'pending').length === 0) return
     setUploading(true)
     setUploadError(null)
+    const needsSub = SUBCATEGORY_CATEGORIES.includes(batchCategory)
+    const newDocs: Document[] = []
 
-    const file = fileRef.current.files[0]
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${Date.now()}.${fileExt}`
-    const filePath = `${projectId}/${fileName}`
+    for (const item of queue) {
+      if (item.status !== 'pending') continue
+      setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'uploading' } : f))
 
-    const { error: storageError } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file)
+      const fileExt = item.file.name.split('.').pop()
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`
+      const filePath = `${projectId}/${fileName}`
 
-    if (storageError) {
-      setUploadError('Storage upload failed: ' + JSON.stringify(storageError))
-      setUploading(false)
-      return
+      const { error: storageError } = await supabase.storage
+        .from('documents').upload(filePath, item.file)
+
+      if (storageError) {
+        setQueue(prev => prev.map(f =>
+          f.id === item.id ? { ...f, status: 'error', error: storageError.message } : f
+        ))
+        continue
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath)
+
+      const { data: newDoc, error: dbError } = await supabase
+        .from('documents')
+        .insert({
+          project_id: projectId,
+          title: item.title,
+          category: batchCategory,
+          subcategory: needsSub ? batchSubcategory : null,
+          version_label: batchVersion,
+          version_group: crypto.randomUUID(),
+          document_date: null,
+          upload_date: new Date().toISOString(),
+          file_url: publicUrl,
+          is_current: true,
+        })
+        .select().single()
+
+      if (dbError) {
+        setQueue(prev => prev.map(f =>
+          f.id === item.id ? { ...f, status: 'error', error: JSON.stringify(dbError) } : f
+        ))
+        continue
+      }
+
+      if (newDoc) newDocs.push(newDoc)
+      setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'done' } : f))
     }
 
-    const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath)
-
-    const { data: newDoc, error: dbError } = await supabase
-      .from('documents')
-      .insert({
-        project_id: projectId,
-        title: form.title,
-        category: form.category,
-        subcategory: needsSubcategory ? form.subcategory : null,
-        version_label: form.version_label,
-        version_group: crypto.randomUUID(),
-        document_date: form.document_date || null,
-        upload_date: new Date().toISOString(),
-        file_url: publicUrl,
-        is_current: true,
-      })
-      .select()
-      .single()
-
-    if (dbError) {
-      setUploadError('Database error: ' + JSON.stringify(dbError))
-      setUploading(false)
-      return
-    }
-
-    if (newDoc) {
-      setDocuments(prev => [newDoc, ...prev])
-    }
-
+    if (newDocs.length) setDocuments(prev => [...newDocs, ...prev])
     setUploading(false)
-    setShowUpload(false)
-    setForm({ title: '', category: 'Contracts', subcategory: 'Architect', version_label: 'v1', document_date: '' })
-    if (fileRef.current) fileRef.current.value = ''
+
+    const hasErrors = queue.some(f => f.status === 'error')
+    if (!hasErrors) {
+      setTimeout(() => { setShowUpload(false); setQueue([]) }, 800)
+    }
   }
 
   async function handleDelete(doc: Document) {
     if (!confirm(`Delete "${doc.title}"? This cannot be undone.`)) return
     setDeletingId(doc.id)
-
     const urlParts = doc.file_url.split('/documents/')
     if (urlParts.length > 1) {
       await supabase.storage.from('documents').remove([urlParts[1]])
     }
-
     await supabase.from('documents').delete().eq('id', doc.id)
     setDocuments(prev => prev.filter(d => d.id !== doc.id))
     setDeletingId(null)
@@ -171,6 +207,16 @@ export default function DocumentsPage() {
   }
 
   const grouped = groupDocuments(filtered)
+  const pendingCount = queue.filter(f => f.status === 'pending').length
+  const doneCount = queue.filter(f => f.status === 'done').length
+  const needsSubcategory = SUBCATEGORY_CATEGORIES.includes(batchCategory)
+
+  function closeModal() {
+    if (uploading) return
+    setShowUpload(false)
+    setQueue([])
+    setUploadError(null)
+  }
 
   return (
     <div className="docs-root">
@@ -178,9 +224,7 @@ export default function DocumentsPage() {
         <h1 className="docs-title">
           {activeCategory === 'All' ? 'Documents' : activeCategory}
         </h1>
-        <button className="upload-btn" onClick={() => setShowUpload(true)}>
-          + Upload
-        </button>
+        <button className="upload-btn" onClick={() => setShowUpload(true)}>+ Upload</button>
       </div>
 
       {loading ? (
@@ -201,14 +245,9 @@ export default function DocumentsPage() {
               <div className="doc-list">
                 {docs.map(doc => (
                   <div key={doc.id} className="doc-row-wrapper">
-                    <a
-                      href={doc.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="doc-row"
-                    >
+                    <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="doc-row">
                       <span className="doc-icon">◻</span>
-                      <span className="doc-title">{doc.title}</span>
+                      <span className="doc-title-text">{doc.title}</span>
                       <span className="doc-version">{doc.version_label}</span>
                       {doc.is_current && <span className="doc-current">current</span>}
                       <span className="doc-date">
@@ -218,12 +257,8 @@ export default function DocumentsPage() {
                       </span>
                       <span className="doc-arrow">→</span>
                     </a>
-                    <button
-                      className="doc-delete"
-                      onClick={() => handleDelete(doc)}
-                      disabled={deletingId === doc.id}
-                      title="Delete document"
-                    >
+                    <button className="doc-delete" onClick={() => handleDelete(doc)}
+                      disabled={deletingId === doc.id} title="Delete document">
                       {deletingId === doc.id ? '…' : '✕'}
                     </button>
                   </div>
@@ -235,94 +270,101 @@ export default function DocumentsPage() {
       )}
 
       {showUpload && (
-        <div className="modal-overlay" onClick={() => setShowUpload(false)}>
+        <div className="modal-overlay" onClick={closeModal}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">Upload Document</h2>
-              <button className="modal-close" onClick={() => setShowUpload(false)}>✕</button>
+              <h2 className="modal-title">Upload Documents</h2>
+              <button className="modal-close" onClick={closeModal}>✕</button>
             </div>
 
-            {uploadError && (
-              <div style={{
-                background: '#FDF0ED',
-                border: '1px solid #E8856A',
-                borderRadius: 4,
-                padding: '10px 16px',
-                fontFamily: "'DM Mono', monospace",
-                fontSize: 12,
-                color: '#C0532A',
-                marginBottom: 20,
-              }}>{uploadError}</div>
-            )}
-
-            <form onSubmit={handleUpload}>
-              <div className="field">
-                <label>Title</label>
-                <input
-                  type="text"
-                  value={form.title}
-                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  placeholder="e.g. General Contract"
-                  required
-                />
-              </div>
-
+            <div className="batch-settings">
               <div className="field-row">
                 <div className="field">
                   <label>Category</label>
-                  <select
-                    value={form.category}
-                    onChange={e => setForm(f => ({ ...f, category: e.target.value, subcategory: 'Architect' }))}
-                  >
+                  <select value={batchCategory} onChange={e => setBatchCategory(e.target.value)} disabled={uploading}>
                     {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="field">
                   <label>Version</label>
-                  <input
-                    type="text"
-                    value={form.version_label}
-                    onChange={e => setForm(f => ({ ...f, version_label: e.target.value }))}
-                    placeholder="v1"
-                  />
+                  <input type="text" value={batchVersion}
+                    onChange={e => setBatchVersion(e.target.value)}
+                    placeholder="v1" disabled={uploading} />
                 </div>
               </div>
-
               {needsSubcategory && (
                 <div className="field">
                   <label>Subcategory</label>
-                  <select
-                    value={form.subcategory}
-                    onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))}
-                  >
+                  <select value={batchSubcategory} onChange={e => setBatchSubcategory(e.target.value)} disabled={uploading}>
                     {SUBCATEGORIES.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
               )}
+            </div>
 
-              <div className="field">
-                <label>Document Date (optional)</label>
-                <input
-                  type="date"
-                  value={form.document_date}
-                  onChange={e => setForm(f => ({ ...f, document_date: e.target.value }))}
-                />
-              </div>
+            <div
+              className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <div className="drop-icon">⬆</div>
+              <p className="drop-label">Drop files here or click to browse</p>
+              <p className="drop-sub">Select multiple files at once</p>
+              <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }}
+                onChange={e => { if (e.target.files) addFiles(e.target.files) }} />
+            </div>
 
-              <div className="field">
-                <label>File</label>
-                <input type="file" ref={fileRef} required />
+            {queue.length > 0 && (
+              <div className="queue">
+                <div className="queue-header-row">
+                  <span className="queue-label">
+                    {queue.length} file{queue.length !== 1 ? 's' : ''}
+                    {doneCount > 0 && ` · ${doneCount} uploaded`}
+                  </span>
+                  {!uploading && (
+                    <button className="clear-btn" onClick={() => setQueue([])}>Clear all</button>
+                  )}
+                </div>
+                <div className="queue-list">
+                  {queue.map(item => (
+                    <div key={item.id} className={`queue-item queue-item--${item.status}`}>
+                      <div className="queue-status-col">
+                        {item.status === 'pending' && <span className="sdot sdot-pending" />}
+                        {item.status === 'uploading' && <span className="sdot sdot-uploading">↑</span>}
+                        {item.status === 'done' && <span className="sdot sdot-done">✓</span>}
+                        {item.status === 'error' && <span className="sdot sdot-error">!</span>}
+                      </div>
+                      <div className="queue-info">
+                        <input className="queue-title-input" value={item.title}
+                          onChange={e => updateTitle(item.id, e.target.value)}
+                          disabled={item.status !== 'pending'} />
+                        <span className="queue-filename">{item.file.name}</span>
+                        {item.error && <span className="queue-error-msg">{item.error}</span>}
+                      </div>
+                      {item.status === 'pending' && !uploading && (
+                        <button className="queue-remove" onClick={() => removeFromQueue(item.id)}>✕</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
+            )}
 
-              <div className="modal-actions">
-                <button type="button" className="cancel-btn" onClick={() => setShowUpload(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="submit-btn" disabled={uploading}>
-                  {uploading ? 'Uploading...' : 'Upload'}
-                </button>
-              </div>
-            </form>
+            {uploadError && <div className="error-box">{uploadError}</div>}
+
+            <div className="modal-actions">
+              <button className="cancel-btn" onClick={closeModal} disabled={uploading}>Cancel</button>
+              <button className="submit-btn" onClick={handleUploadAll}
+                disabled={uploading || pendingCount === 0}>
+                {uploading
+                  ? `Uploading… (${doneCount}/${queue.length})`
+                  : pendingCount > 0
+                    ? `Upload ${pendingCount} file${pendingCount !== 1 ? 's' : ''}`
+                    : 'Upload'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -330,223 +372,91 @@ export default function DocumentsPage() {
       <style jsx>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=DM+Mono:wght@300;400&display=swap');
 
-        .docs-root {
-          font-family: 'DM Mono', monospace;
-        }
+        .docs-root { font-family: 'DM Mono', monospace; }
 
-        .docs-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 32px;
-        }
-
-        .docs-title {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 36px;
-          font-weight: 300;
-          color: #1c1a17;
-          margin: 0;
-          letter-spacing: -0.02em;
-        }
-
-        .upload-btn {
-          padding: 10px 20px;
-          background: #1c1a17;
-          color: #f0e8d8;
-          border: none;
-          border-radius: 2px;
-          font-family: 'DM Mono', monospace;
-          font-size: 11px;
-          letter-spacing: 0.1em;
-          cursor: pointer;
-          transition: background 0.15s;
-        }
-
+        .docs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+        .docs-title { font-family: 'Cormorant Garamond', serif; font-size: 36px; font-weight: 300; color: #1c1a17; margin: 0; letter-spacing: -0.02em; }
+        .upload-btn { padding: 10px 20px; background: #1c1a17; color: #f0e8d8; border: none; border-radius: 2px; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; cursor: pointer; transition: background 0.15s; }
         .upload-btn:hover { background: #2e2a24; }
 
         .state-msg { font-size: 13px; color: #bbb0a0; font-style: italic; }
-
         .empty-state { padding: 60px 0; text-align: center; }
-
-        .empty-title {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 24px; font-weight: 300; color: #1c1a17; margin: 0 0 8px;
-        }
-
+        .empty-title { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 300; color: #1c1a17; margin: 0 0 8px; }
         .empty-sub { font-size: 12px; color: #9a8e7e; margin: 0 0 24px; }
 
         .doc-groups { display: flex; flex-direction: column; gap: 40px; }
-
-        .group-title {
-          font-size: 10px;
-          letter-spacing: 0.15em;
-          text-transform: uppercase;
-          color: #9a8e7e;
-          margin: 0 0 12px;
-          padding-bottom: 8px;
-          border-bottom: 1px solid #e8e0d5;
-        }
-
+        .group-title { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: #9a8e7e; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid #e8e0d5; }
         .doc-list { display: flex; flex-direction: column; gap: 2px; }
-
-        .doc-row-wrapper {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-
-        .doc-row {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 14px 16px;
-          background: #fff;
-          border: 1px solid #e8e0d5;
-          border-radius: 2px;
-          text-decoration: none;
-          color: inherit;
-          transition: all 0.15s;
-        }
-
+        .doc-row-wrapper { display: flex; align-items: center; gap: 4px; }
+        .doc-row { flex: 1; display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #fff; border: 1px solid #e8e0d5; border-radius: 2px; text-decoration: none; color: inherit; transition: all 0.15s; }
         .doc-row:hover { border-color: #c9b99a; background: #faf8f5; }
-
-        .doc-delete {
-          opacity: 0;
-          background: none;
-          border: none;
-          color: #c0532a;
-          font-size: 11px;
-          cursor: pointer;
-          padding: 6px 8px;
-          transition: opacity 0.15s;
-          font-family: 'DM Mono', monospace;
-        }
-
+        .doc-delete { opacity: 0; background: none; border: none; color: #c0532a; font-size: 11px; cursor: pointer; padding: 6px 8px; transition: opacity 0.15s; font-family: 'DM Mono', monospace; }
         .doc-row-wrapper:hover .doc-delete { opacity: 1; }
         .doc-delete:hover { color: #a03010; }
-
         .doc-icon { font-size: 12px; color: #9a8e7e; }
-        .doc-title { flex: 1; font-size: 13px; color: #1c1a17; }
+        .doc-title-text { flex: 1; font-size: 13px; color: #1c1a17; }
         .doc-version { font-size: 10px; color: #9a8e7e; letter-spacing: 0.08em; }
-
-        .doc-current {
-          font-size: 9px;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-          color: #6b8c6b;
-          background: #eef4ee;
-          padding: 2px 8px;
-          border-radius: 10px;
-        }
-
+        .doc-current { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b8c6b; background: #eef4ee; padding: 2px 8px; border-radius: 10px; }
         .doc-date { font-size: 11px; color: #bbb0a0; min-width: 100px; text-align: right; }
         .doc-arrow { font-size: 12px; color: #bbb0a0; }
 
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(28,26,23,0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 100;
-        }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(28,26,23,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+        .modal { background: #faf8f5; border-radius: 3px; width: 580px; max-width: 90vw; max-height: 88vh; overflow-y: auto; padding: 32px; }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+        .modal-title { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 400; color: #1c1a17; margin: 0; }
+        .modal-close { background: none; border: none; font-size: 14px; color: #9a8e7e; cursor: pointer; padding: 4px; }
 
-        .modal {
-          background: #faf8f5;
-          border-radius: 3px;
-          width: 480px;
-          max-width: 90vw;
-          padding: 32px;
-        }
-
-        .modal-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 28px;
-        }
-
-        .modal-title {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 24px;
-          font-weight: 400;
-          color: #1c1a17;
-          margin: 0;
-        }
-
-        .modal-close {
-          background: none;
-          border: none;
-          font-size: 14px;
-          color: #9a8e7e;
-          cursor: pointer;
-          padding: 4px;
-        }
-
-        .field { margin-bottom: 20px; }
+        .batch-settings { margin-bottom: 20px; }
+        .field { margin-bottom: 16px; }
         .field-row { display: flex; gap: 16px; }
         .field-row .field { flex: 1; }
+        label { display: block; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b6055; margin-bottom: 7px; }
+        input[type="text"], select { width: 100%; box-sizing: border-box; padding: 10px 12px; background: #fff; border: 1px solid #ddd5c8; border-radius: 2px; font-family: 'DM Mono', monospace; font-size: 12px; color: #1c1a17; outline: none; }
+        input[type="text"]:focus, select:focus { border-color: #8b6f47; }
 
-        label {
-          display: block;
-          font-size: 10px;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: #6b6055;
-          margin-bottom: 7px;
-        }
+        .drop-zone { border: 1.5px dashed #c9b99a; border-radius: 3px; padding: 32px 24px; text-align: center; cursor: pointer; transition: all 0.15s; margin-bottom: 20px; background: #fff; }
+        .drop-zone:hover, .drop-zone.drag-over { border-color: #8b6f47; background: #faf5ee; }
+        .drop-icon { font-size: 20px; color: #c9b99a; margin-bottom: 8px; }
+        .drop-label { font-size: 13px; color: #3a3530; margin: 0 0 4px; }
+        .drop-sub { font-size: 11px; color: #9a8e7e; margin: 0; }
 
-        input, select {
-          width: 100%;
-          box-sizing: border-box;
-          padding: 10px 12px;
-          background: #fff;
-          border: 1px solid #ddd5c8;
-          border-radius: 2px;
-          font-family: 'DM Mono', monospace;
-          font-size: 12px;
-          color: #1c1a17;
-          outline: none;
-        }
+        .queue { margin-bottom: 20px; }
+        .queue-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .queue-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6055; }
+        .clear-btn { background: none; border: none; font-size: 10px; color: #9a8e7e; cursor: pointer; font-family: 'DM Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+        .clear-btn:hover { color: #c0532a; }
 
-        input:focus, select:focus { border-color: #8b6f47; }
+        .queue-list { display: flex; flex-direction: column; gap: 4px; }
+        .queue-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #fff; border: 1px solid #e8e0d5; border-radius: 2px; }
+        .queue-item--done { opacity: 0.6; }
+        .queue-item--error { border-color: #e8856a; background: #fdf5f2; }
 
-        .modal-actions {
-          display: flex;
-          gap: 12px;
-          justify-content: flex-end;
-          margin-top: 28px;
-        }
+        .queue-status-col { flex-shrink: 0; width: 20px; text-align: center; }
+        .sdot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; font-size: 10px; font-weight: bold; }
+        .sdot-pending { background: #e8e0d5; }
+        .sdot-uploading { background: #e8f0e8; color: #4a7a4a; animation: pulse 1s infinite; }
+        .sdot-done { background: #eef4ee; color: #4a7a4a; }
+        .sdot-error { background: #fdf0ed; color: #c0532a; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-        .cancel-btn {
-          padding: 10px 20px;
-          background: none;
-          border: 1px solid #ddd5c8;
-          border-radius: 2px;
-          font-family: 'DM Mono', monospace;
-          font-size: 11px;
-          color: #6b6055;
-          cursor: pointer;
-        }
+        .queue-info { flex: 1; min-width: 0; }
+        .queue-title-input { width: 100%; box-sizing: border-box; background: transparent; border: none; border-bottom: 1px solid transparent; font-family: 'DM Mono', monospace; font-size: 12px; color: #1c1a17; padding: 0 0 2px; outline: none; transition: border-color 0.15s; }
+        .queue-title-input:focus { border-bottom-color: #8b6f47; }
+        .queue-title-input:disabled { color: #9a8e7e; }
+        .queue-filename { display: block; font-size: 10px; color: #bbb0a0; margin-top: 2px; }
+        .queue-error-msg { display: block; font-size: 10px; color: #c0532a; margin-top: 2px; }
 
-        .submit-btn {
-          padding: 10px 24px;
-          background: #1c1a17;
-          color: #f0e8d8;
-          border: none;
-          border-radius: 2px;
-          font-family: 'DM Mono', monospace;
-          font-size: 11px;
-          letter-spacing: 0.1em;
-          cursor: pointer;
-          transition: background 0.15s;
-        }
+        .queue-remove { background: none; border: none; color: #bbb0a0; font-size: 10px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; font-family: 'DM Mono', monospace; }
+        .queue-remove:hover { color: #c0532a; }
 
+        .error-box { background: #fdf0ed; border: 1px solid #e8856a; border-radius: 2px; padding: 10px 14px; font-size: 11px; color: #c0532a; margin-bottom: 16px; }
+
+        .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+        .cancel-btn { padding: 10px 20px; background: none; border: 1px solid #ddd5c8; border-radius: 2px; font-family: 'DM Mono', monospace; font-size: 11px; color: #6b6055; cursor: pointer; }
+        .cancel-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .submit-btn { padding: 10px 24px; background: #1c1a17; color: #f0e8d8; border: none; border-radius: 2px; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; cursor: pointer; transition: background 0.15s; }
         .submit-btn:hover:not(:disabled) { background: #2e2a24; }
-        .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
       `}</style>
     </div>
   )
