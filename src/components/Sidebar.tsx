@@ -78,6 +78,14 @@ export default function Sidebar() {
           <span className="nav-label">Renderings</span>
         </button>
 
+        {/* Notes */}
+        <button
+          className={`nav-item ${pathname === '/notes' ? 'active' : ''}`}
+          onClick={() => router.push('/notes')}
+        >
+          <span className="nav-label">Notes</span>
+        </button>
+
         {/* Team */}
         <button
           className={`nav-item ${pathname === '/team' ? 'active' : ''}`}
@@ -123,9 +131,7 @@ export default function Sidebar() {
           padding: 4px;
         }
 
-        .brand-mark svg {
-          width: 100%; height: 100%;
-        }
+        .brand-mark svg { width: 100%; height: 100%; }
 
         .brand-name {
           font-size: 12px;
@@ -141,11 +147,10 @@ export default function Sidebar() {
           flex-direction: column;
           padding: 0;
           flex: 1;
+          overflow-y: auto;
         }
 
-        .nav-spacer {
-          height: 48px;
-        }
+        .nav-spacer { height: 48px; }
 
         .nav-item {
           display: flex;

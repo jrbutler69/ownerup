@@ -11,8 +11,9 @@ export default function HomePage() {
     documents: any[]
     photos: any[]
     renderings: any[]
+    notes: any[]
     timeline: any[]
-  }>({ documents: [], photos: [], renderings: [], timeline: [] })
+  }>({ documents: [], photos: [], renderings: [], notes: [], timeline: [] })
 
   const supabase = createClient()
   const router = useRouter()
@@ -23,18 +24,16 @@ export default function HomePage() {
       if (!user) return
 
       const { data: projects } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1)
+        .from('projects').select('id').eq('user_id', user.id).limit(1)
 
       if (!projects?.length) { setLoading(false); return }
       const pid = projects[0].id
 
-      const [docsRes, photosRes, renderingsRes, timelineRes] = await Promise.all([
+      const [docsRes, photosRes, renderingsRes, notesRes, timelineRes] = await Promise.all([
         supabase.from('documents').select('*').eq('project_id', pid).eq('is_current', true).order('upload_date', { ascending: false }).limit(4),
         supabase.from('photos').select('*').eq('project_id', pid).order('taken_at', { ascending: false }).limit(6),
         supabase.from('renderings').select('*').eq('project_id', pid).order('uploaded_at', { ascending: false }).limit(6),
+        supabase.from('notes').select('*').eq('project_id', pid).order('created_at', { ascending: false }).limit(4),
         supabase.from('timeline_feed').select('*').eq('project_id', pid).order('event_timestamp', { ascending: false }).limit(20),
       ])
 
@@ -42,6 +41,7 @@ export default function HomePage() {
         documents: docsRes.data ?? [],
         photos: photosRes.data ?? [],
         renderings: renderingsRes.data ?? [],
+        notes: notesRes.data ?? [],
         timeline: timelineRes.data ?? [],
       })
       setLoading(false)
@@ -51,16 +51,9 @@ export default function HomePage() {
 
   return (
     <div className="home">
-      {/* View toggle */}
       <div className="view-toggle">
-        <button
-          className={`toggle-btn ${view === 'overview' ? 'active' : ''}`}
-          onClick={() => setView('overview')}
-        >Overview</button>
-        <button
-          className={`toggle-btn ${view === 'timeline' ? 'active' : ''}`}
-          onClick={() => setView('timeline')}
-        >Timeline</button>
+        <button className={`toggle-btn ${view === 'overview' ? 'active' : ''}`} onClick={() => setView('overview')}>Overview</button>
+        <button className={`toggle-btn ${view === 'timeline' ? 'active' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
       </div>
 
       {view === 'overview'
@@ -71,62 +64,31 @@ export default function HomePage() {
       <style jsx>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=DM+Mono:wght@300;400&display=swap');
 
-        .home {
-          font-family: 'DM Mono', monospace;
-          animation: fadeIn 0.35s ease;
-        }
+        .home { font-family: 'DM Mono', monospace; animation: fadeIn 0.35s ease; }
 
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(6px); }
           to { opacity: 1; transform: translateY(0); }
         }
 
-        .view-toggle {
-          display: flex;
-          align-items: center;
-          gap: 24px;
-          margin-bottom: 40px;
-        }
+        .view-toggle { display: flex; align-items: center; gap: 24px; margin-bottom: 40px; }
 
         .toggle-btn {
-          background: none;
-          border: none;
-          border-bottom: 1px solid transparent;
-          font-family: 'DM Mono', monospace;
-          font-size: 9px;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-          color: #B0A898;
-          cursor: pointer;
-          padding: 0 0 4px;
+          background: none; border: none; border-bottom: 1px solid transparent;
+          font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.18em;
+          text-transform: uppercase; color: #B0A898; cursor: pointer; padding: 0 0 4px;
           transition: all 0.15s;
         }
-
         .toggle-btn:hover:not(.active) { color: #7A7468; }
-
-        .toggle-btn.active {
-          color: #1A1814;
-          border-bottom-color: #1A1814;
-        }
+        .toggle-btn.active { color: #1A1814; border-bottom-color: #1A1814; }
       `}</style>
     </div>
   )
 }
 
 function OverviewContent({ data, loading, router }: { data: any; loading: boolean; router: any }) {
-
   function formatDate(s: string) {
     return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }
-
-  // Hardcoded upcoming items — will be wired to DB later
-  const upcoming = [
-    { date: '2026-03-25', label: 'On-site Meeting' },
-    { date: '2026-04-06', label: 'Septic drawings due' },
-  ]
-
-  function formatUpcomingDate(s: string) {
-    return new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })
   }
 
   return (
@@ -172,15 +134,20 @@ function OverviewContent({ data, loading, router }: { data: any; loading: boolea
           )}
         </div>
 
-        {/* UPCOMING */}
+        {/* NOTES */}
         <div className="section section-left">
           <div className="section-header">
-            <span className="section-title">Upcoming</span>
+            <span className="section-title">Notes</span>
+            <button className="view-all" onClick={() => router.push('/notes')}>View all →</button>
           </div>
-          {upcoming.map((item, i) => (
-            <div key={i} className="row">
-              <span className="row-name">{item.label}</span>
-              <span className="row-meta">{formatUpcomingDate(item.date)}</span>
+          {loading ? (
+            <p className="empty-state">Loading…</p>
+          ) : data.notes.length === 0 ? (
+            <p className="empty-state">No notes yet</p>
+          ) : data.notes.map((note: any) => (
+            <div key={note.id} className="row">
+              <span className="row-name note-body">{note.body}</span>
+              <span className="row-meta">{formatDate(note.created_at)}</span>
             </div>
           ))}
         </div>
@@ -213,22 +180,18 @@ function OverviewContent({ data, loading, router }: { data: any; loading: boolea
         @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
         .sections { display: grid; grid-template-columns: 1fr 1fr; }
-
         .section { padding: 32px 0; border-bottom: 1px solid #E8E3DC; }
         .section-left { padding-right: 48px; border-right: 1px solid #E8E3DC; }
         .section-right { padding-left: 48px; }
         .section:nth-last-child(-n+2) { border-bottom: none; }
 
         .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-
         .section-title { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #7A7468; }
 
         .view-all {
-          background: none; border: none;
-          font-family: 'DM Mono', monospace;
-          font-size: 9px; letter-spacing: 0.1em;
-          color: #B0A898; cursor: pointer; padding: 0;
-          transition: color 0.15s;
+          background: none; border: none; font-family: 'DM Mono', monospace;
+          font-size: 9px; letter-spacing: 0.1em; color: #B0A898; cursor: pointer;
+          padding: 0; transition: color 0.15s;
         }
         .view-all:hover { color: #1A1814; }
 
@@ -250,6 +213,10 @@ function OverviewContent({ data, loading, router }: { data: any; loading: boolea
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         a.row:hover .row-name { color: #8B6F4E; }
+
+        .note-body {
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
 
         .row-meta { font-size: 9px; letter-spacing: 0.08em; color: #B0A898; white-space: nowrap; flex-shrink: 0; }
 
