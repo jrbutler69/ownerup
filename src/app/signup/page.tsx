@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
@@ -12,11 +12,19 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const inviteToken = searchParams.get('invite')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+
+  // Pre-fill email if passed in URL (e.g. ?email=foo@bar.com)
+  useEffect(() => {
+    const emailParam = searchParams.get('email')
+    if (emailParam) setEmail(emailParam)
+  }, [searchParams])
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
@@ -34,7 +42,7 @@ export default function SignupPage() {
 
     setLoading(true)
 
-    const { error } = await supabase.auth.signUp({
+    const { error: signupError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -42,30 +50,54 @@ export default function SignupPage() {
       },
     })
 
-    if (error) {
-      setError(error.message)
+    if (signupError) {
+      setError(signupError.message)
       setLoading(false)
-    } else {
-      // Check if user already has a project
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: projects } = await supabase
-          .from('projects')
-          .select('id')
-          .eq('user_id', user.id)
-          .limit(1)
-
-        if (!projects || projects.length === 0) {
-          router.push('/onboarding')
-        } else {
-          router.push('/')
-        }
-      } else {
-        // Email confirmation is on — show confirmation screen
-        setSuccess(true)
-      }
-      setLoading(false)
+      return
     }
+
+    // If there's an invite token, accept it now
+    if (inviteToken) {
+      try {
+        const res = await fetch('/api/invite/accept', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: inviteToken }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          // Don't block the user — they're signed up, just show a warning
+          console.error('Invite accept error:', data.error)
+        }
+        // Redirect to home — they've been added to the project
+        router.push('/home')
+      } catch (err) {
+        console.error('Failed to accept invite:', err)
+        router.push('/home')
+      }
+      return
+    }
+
+    // No invite — check if user has a project
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: members } = await supabase
+        .from('project_members')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+
+      if (!members || members.length === 0) {
+        router.push('/onboarding')
+      } else {
+        router.push('/home')
+      }
+    } else {
+      // Email confirmation is on — show confirmation screen
+      setSuccess(true)
+    }
+    setLoading(false)
   }
 
   if (success) {
@@ -88,7 +120,9 @@ export default function SignupPage() {
     <div style={styles.page}>
       <div style={styles.box}>
         <div style={styles.logo}>OWNERUP</div>
-        <p style={styles.subtitle}>Create your account</p>
+        <p style={styles.subtitle}>
+          {inviteToken ? 'Create your account to accept your invitation' : 'Create your account'}
+        </p>
 
         <form onSubmit={handleSignup} style={styles.form}>
           <div style={styles.field}>
@@ -136,7 +170,7 @@ export default function SignupPage() {
 
         <p style={styles.footer}>
           Already have an account?{' '}
-          <a href="/login" style={styles.link}>Sign in</a>
+          <a href={inviteToken ? `/login?invite=${inviteToken}` : '/login'} style={styles.link}>Sign in</a>
         </p>
       </div>
     </div>

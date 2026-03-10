@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -10,6 +10,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const inviteToken = searchParams.get('invite')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,10 +28,26 @@ export default function LoginPage() {
     if (error) {
       setError(error.message)
       setLoading(false)
-    } else {
-      router.push('/')
-      router.refresh()
+      return
     }
+
+    // If there's an invite token, accept it before redirecting
+    if (inviteToken) {
+      try {
+        await fetch('/api/invite/accept', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: inviteToken }),
+        })
+      } catch (err) {
+        console.error('Failed to accept invite:', err)
+      }
+      router.push('/home')
+      return
+    }
+
+    router.push('/')
+    router.refresh()
   }
 
   return (
@@ -71,7 +89,9 @@ export default function LoginPage() {
       <div className="login-right">
         <div className="form-container">
           <h1>Welcome back</h1>
-          <p className="subtitle">Sign in to your project</p>
+          <p className="subtitle">
+            {inviteToken ? 'Sign in to accept your invitation' : 'Sign in to your project'}
+          </p>
 
           <form onSubmit={handleLogin}>
             <div className="field">
@@ -88,20 +108,20 @@ export default function LoginPage() {
             </div>
 
             <div className="field">
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-    <span style={{ fontSize: '10px', fontWeight: 400, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Password</span>
-    <a href="/reset-password" style={{ fontSize: '11px', color: '#C9B99A', textDecoration: 'none', fontFamily: '"DM Mono", monospace' }}>Forgot password?</a>
-  </div>
-  <input
-    id="password"
-    type="password"
-    value={password}
-    onChange={e => setPassword(e.target.value)}
-    placeholder="••••••••"
-    required
-    autoComplete="current-password"
-  />
-</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '10px', fontWeight: 400, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Password</span>
+                <a href="/reset-password" style={{ fontSize: '11px', color: '#C9B99A', textDecoration: 'none', fontFamily: '"DM Mono", monospace' }}>Forgot password?</a>
+              </div>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                autoComplete="current-password"
+              />
+            </div>
 
             {error && <p className="error-msg">{error}</p>}
 
@@ -113,10 +133,10 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-        <p style={{ fontFamily: '"DM Mono", monospace', fontSize: '11px', color: '#888', marginTop: '24px', textAlign: 'center' }}>
-          Don't have an account?{' '}
-          <a href="/signup" style={{ color: '#C9B99A', textDecoration: 'none' }}>Sign up</a>
-        </p>
+          <p style={{ fontFamily: '"DM Mono", monospace', fontSize: '11px', color: '#888', marginTop: '24px', textAlign: 'center' }}>
+            Don't have an account?{' '}
+            <a href={inviteToken ? `/signup?invite=${inviteToken}` : '/signup'} style={{ color: '#C9B99A', textDecoration: 'none' }}>Sign up</a>
+          </p>
         </div>
       </div>
 
@@ -134,7 +154,6 @@ export default function LoginPage() {
           font-family: 'DM Mono', monospace;
         }
 
-        /* ── Left panel ── */
         .login-left {
           flex: 1;
           background-color: #1c1a17;
@@ -199,7 +218,6 @@ export default function LoginPage() {
           opacity: 0.35;
         }
 
-        /* ── Right panel ── */
         .login-right {
           width: 480px;
           background: #faf8f5;
