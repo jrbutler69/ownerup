@@ -32,21 +32,42 @@ export default function OnboardingPage() {
       return
     }
 
-    const { error } = await supabase.from('projects').insert({
-      user_id: user.id,
-      name,
-      address,
-      start_date: startDate || null,
-      target_completion: targetCompletion || null,
-    })
+    const { data: project, error } = await supabase
+      .from('projects')
+      .insert({
+        user_id: user.id,
+        name,
+        address,
+        start_date: startDate || null,
+        target_completion: targetCompletion || null,
+      })
+      .select()
+      .single()
 
     if (error) {
       setError(error.message)
       setLoading(false)
-    } else {
-      router.push('/')
-      router.refresh()
+      return
     }
+
+    // Add creator as owner in project_members
+    const { error: memberError } = await supabase
+      .from('project_members')
+      .insert({
+        project_id: project.id,
+        user_id: user.id,
+        role: 'owner',
+        status: 'active',
+      })
+
+    if (memberError) {
+      setError(memberError.message)
+      setLoading(false)
+      return
+    }
+
+    router.push('/home')
+    router.refresh()
   }
 
   return (

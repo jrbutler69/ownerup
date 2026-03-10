@@ -3,7 +3,13 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
-    request,
+    request: {
+      ...request,
+      headers: new Headers({
+        ...Object.fromEntries(request.headers),
+        'x-pathname': request.nextUrl.pathname,
+      }),
+    },
   })
 
   const supabase = createServerClient(
