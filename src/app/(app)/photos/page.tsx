@@ -93,8 +93,15 @@ export default function PhotosPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: project } = await supabase
-        .from('projects').select('id').eq('user_id', user.id).single()
+      const { data: memberRows } = await supabase
+  .from('project_members').select('project_id')
+  .eq('user_id', user.id).eq('status', 'active').limit(1)
+if (!memberRows?.length) return
+const projectId = memberRows[0].project_id
+setProjectId(projectId)
+const { data } = await supabase
+  .from('photos').select('*').eq('project_id', projectId)
+  .order('taken_at', { ascending: false })
       if (!project) return
       setProjectId(project.id)
       const { data } = await supabase
