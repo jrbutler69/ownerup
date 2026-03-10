@@ -23,11 +23,18 @@ export default function HomePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: projects } = await supabase
-        .from('projects').select('id').eq('user_id', user.id).limit(1)
+    const { data: memberRows } = await supabase
+  .from('project_members')
+  .select('project_id')
+  .eq('user_id', user.id)
+  .eq('status', 'active')
+  .limit(1)
 
-      if (!projects?.length) { setLoading(false); return }
-      const pid = projects[0].id
+if (!memberRows?.length) {
+  router.push('/onboarding')
+  return
+}
+const pid = memberRows[0].project_id
 
       const [docsRes, photosRes, renderingsRes, notesRes, timelineRes] = await Promise.all([
         supabase.from('documents').select('*').eq('project_id', pid).eq('is_current', true).order('upload_date', { ascending: false }).limit(4),
