@@ -53,7 +53,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/auth') ||
     pathname.startsWith('/signup') ||
     pathname.startsWith('/reset-password') ||
-    pathname.startsWith('/update-password')
+    pathname.startsWith('/update-password') ||
+    pathname.startsWith('/invite')
   ) {
     if (user && (pathname === '/login' || pathname === '/signup')) {
       return NextResponse.redirect(new URL('/home', request.url))

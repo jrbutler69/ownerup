@@ -3,246 +3,197 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
-interface Person {
-  id: string
-  project_id: string
-  name: string
-  role: string
-  company: string | null
-  email: string | null
-  phone: string | null
-  notes: string | null
-}
+const SECTIONS = [
+  { key: 'documents_contracts', label: 'Documents — Contracts' },
+  { key: 'documents_drawings', label: 'Documents — Drawings' },
+  { key: 'documents_budgets', label: 'Documents — Budgets' },
+  { key: 'documents_invoices', label: 'Documents — Invoices' },
+  { key: 'documents_permits', label: 'Documents — Permits' },
+  { key: 'documents_insurance', label: 'Documents — Insurance' },
+  { key: 'documents_specs', label: 'Documents — Specs' },
+  { key: 'documents_other', label: 'Documents — Other' },
+  { key: 'photos', label: 'Photos' },
+  { key: 'renderings', label: 'Renderings' },
+  { key: 'notes', label: 'Notes' },
+  { key: 'budget', label: 'Budget' },
+  { key: 'decisions', label: 'Decisions' },
+  { key: 'team', label: 'Team' },
+]
 
-const ROLES = ['Architect', 'Contractor', 'Engineer', 'Designer', 'Vendor', 'Other']
+const ROLES = ['co-owner', 'architect', 'contractor', 'other']
+
+type AccessLevel = 'none' | 'view' | 'edit'
+type Permissions = Record<string, AccessLevel>
+
+interface Member {
+  id: string
+  user_id: string | null
+  invited_email: string
+  role: string
+  status: string
+  created_at: string
+}
 
 export default function TeamPage() {
   const supabase = createClient()
   const [projectId, setProjectId] = useState<string | null>(null)
-  const [people, setPeople] = useState<Person[]>([])
+  const [isOwner, setIsOwner] = useState(false)
+  const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [filterRole, setFilterRole] = useState<string | null>(null)
+  const [showInvite, setShowInvite] = useState(false)
 
-  // Form state
-  const [name, setName] = useState('')
-  const [role, setRole] = useState('Contractor')
-  const [company, setCompany] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [notes, setNotes] = useState('')
+  // Invite form state
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('contractor')
+  const [permissions, setPermissions] = useState<Permissions>(() =>
+    Object.fromEntries(SECTIONS.map(s => [s.key, 'none' as AccessLevel]))
+  )
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteError, setInviteError] = useState('')
+  const [inviteSuccess, setInviteSuccess] = useState('')
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: project } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
+      const cookieValue = document.cookie
+  .split('; ')
+  .find(r => r.startsWith('selected_project_id='))
+  ?.split('=')[1]
 
-      if (!project) return
-      setProjectId(project.id)
+const { data: memberRows } = await supabase
+  .from('project_members')
+  .select('project_id, role')
+  .eq('user_id', user.id)
+  .eq('status', 'active')
 
-      const { data } = await supabase
-        .from('people')
+if (!memberRows?.length) return
+
+const memberRow = memberRows.find(m => m.project_id === cookieValue) ?? memberRows[0]
+
+      if (!memberRow) return
+      setProjectId(memberRow.project_id)
+      setIsOwner(memberRow.role === 'owner' || memberRow.role === 'co-owner')
+
+      const { data: allMembers } = await supabase
+        .from('project_members')
         .select('*')
-        .eq('project_id', project.id)
-        .order('name')
+        .eq('project_id', memberRow.project_id)
+        .order('created_at')
 
-      if (data) setPeople(data)
+      setMembers(allMembers ?? [])
       setLoading(false)
     }
     load()
   }, [])
 
-  async function handleAdd() {
-    if (!projectId || !name.trim()) return
-    setError(null)
-
-    const { data, error: err } = await supabase
-      .from('people')
-      .insert({
-        project_id: projectId,
-        name: name.trim(),
-        role,
-        company: company.trim() || null,
-        email: email.trim() || null,
-        phone: phone.trim() || null,
-        notes: notes.trim() || null,
-      })
-      .select()
-      .single()
-
-    if (err) { setError(err.message); return }
-
-    setPeople(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
-    resetForm()
-    setShowForm(false)
+  function setPermission(section: string, level: AccessLevel) {
+    setPermissions(prev => ({ ...prev, [section]: level }))
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Remove this person?')) return
-    await supabase.from('people').delete().eq('id', id)
-    setPeople(prev => prev.filter(p => p.id !== id))
-    if (expanded === id) setExpanded(null)
-  }
-
-  function resetForm() {
-    setName(''); setRole('Contractor'); setCompany('')
-    setEmail(''); setPhone(''); setNotes('')
-  }
-
-  const rolesPresent = [...new Set(people.map(p => p.role))].sort()
-  const filtered = filterRole ? people.filter(p => p.role === filterRole) : people
-
-  // Group by role
-  const grouped = ROLES.reduce<Record<string, Person[]>>((acc, r) => {
-    const group = filtered.filter(p => p.role === r)
-    if (group.length > 0) acc[r] = group
-    return acc
-  }, {})
-  // Add any roles not in the predefined list
-  filtered.forEach(p => {
-    if (!ROLES.includes(p.role) && !grouped[p.role]) {
-      grouped[p.role] = filtered.filter(pp => pp.role === p.role)
+  function handleRoleChange(role: string) {
+    setInviteRole(role)
+    if (role === 'co-owner') {
+      setPermissions(Object.fromEntries(SECTIONS.map(s => [s.key, 'edit' as AccessLevel])))
+    } else {
+      setPermissions(Object.fromEntries(SECTIONS.map(s => [s.key, 'none' as AccessLevel])))
     }
-  })
+  }
+
+  async function handleInvite() {
+    if (!projectId || !inviteEmail.trim()) return
+    setInviteLoading(true)
+    setInviteError('')
+    setInviteSuccess('')
+
+    const res = await fetch('/api/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId,
+        email: inviteEmail.trim().toLowerCase(),
+        role: inviteRole,
+        permissions,
+      }),
+    })
+
+    const json = await res.json()
+    if (!res.ok) {
+      setInviteError(json.error ?? 'Something went wrong')
+    } else {
+      setInviteSuccess(`Invite sent to ${inviteEmail}`)
+      setInviteEmail('')
+      setInviteRole('contractor')
+      setPermissions(Object.fromEntries(SECTIONS.map(s => [s.key, 'none' as AccessLevel])))
+      setShowInvite(false)
+
+      // Refresh members
+      const { data: allMembers } = await supabase
+        .from('project_members')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at')
+      setMembers(allMembers ?? [])
+    }
+    setInviteLoading(false)
+  }
+
+  async function handleRevoke(memberId: string) {
+    if (!confirm('Remove this person from the project?')) return
+    await supabase.from('project_members').delete().eq('id', memberId)
+    setMembers(prev => prev.filter(m => m.id !== memberId))
+  }
+
+  const statusLabel: Record<string, string> = {
+    active: 'Active',
+    pending: 'Invite pending',
+    declined: 'Declined',
+  }
 
   return (
-    <div style={{ padding: '40px 48px', maxWidth: 800, margin: '0 auto' }}>
+    <div style={{ maxWidth: 720 }}>
       <style>{`
-        .person-card {
-          background: #fff;
-          border: 1px solid #E8E0D5;
-          border-radius: 6px;
-          margin-bottom: 10px;
-          overflow: hidden;
-          transition: border-color 0.15s;
-        }
-        .person-card:hover { border-color: #C9B99A; }
-        .person-header {
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=DM+Mono:wght@300;400&display=swap');
+        .team-member-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 16px 24px;
-          cursor: pointer;
+          padding: 16px 0;
+          border-bottom: 1px solid #EDE8E1;
           gap: 16px;
         }
-        .person-name {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 20px;
-          font-weight: 400;
-          color: #1C1A17;
-        }
-        .person-company {
-          font-family: 'DM Mono', monospace;
-          font-size: 11px;
-          color: #9A8F82;
-          margin-top: 2px;
-        }
-        .person-body {
-          padding: 16px 24px 20px;
-          border-top: 1px solid #F0EBE3;
-        }
-        .contact-link {
-          font-family: 'DM Mono', monospace;
-          font-size: 12px;
-          color: #6B6359;
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          margin-right: 20px;
-          margin-bottom: 8px;
-        }
-        .contact-link:hover { color: #1C1A17; }
-        .role-group-label {
-          font-family: 'DM Mono', monospace;
-          font-size: 10px;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: #9A8F82;
-          margin: 28px 0 10px;
-          padding-bottom: 8px;
-          border-bottom: 1px solid #E8E0D5;
-        }
-        .role-group-label:first-child { margin-top: 0; }
-        .role-filter {
+        .team-member-row:last-child { border-bottom: none; }
+        .access-toggle {
           display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          margin-bottom: 28px;
-        }
-        .filter-btn {
-          font-family: 'DM Mono', monospace;
-          font-size: 10px;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          padding: 5px 12px;
-          border-radius: 2px;
-          border: 1px solid #E8E0D5;
-          background: none;
-          color: #6B6359;
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .filter-btn:hover { border-color: #C9B99A; color: #1C1A17; }
-        .filter-btn.active { background: #1C1A17; color: #F5F2EE; border-color: #1C1A17; }
-        .btn-ghost {
-          background: none;
-          border: 1px solid #E8E0D5;
-          color: #6B6359;
-          font-family: 'DM Mono', monospace;
-          font-size: 11px;
-          letter-spacing: 0.06em;
-          padding: 8px 14px;
-          cursor: pointer;
-          border-radius: 2px;
-          transition: all 0.15s;
-        }
-        .btn-ghost:hover { border-color: #C9B99A; color: #1C1A17; }
-        .btn-primary {
-          background: #1C1A17;
-          border: none;
-          color: #F5F2EE;
-          font-family: 'DM Mono', monospace;
-          font-size: 11px;
-          letter-spacing: 0.06em;
-          padding: 9px 18px;
-          cursor: pointer;
-          border-radius: 2px;
-        }
-        .btn-primary:hover { background: #2E2B26; }
-        .btn-danger {
-          background: none;
-          border: none;
-          color: #C0532A;
-          font-family: 'DM Mono', monospace;
-          font-size: 10px;
-          cursor: pointer;
-          padding: 4px 0;
-          letter-spacing: 0.05em;
-        }
-        input, textarea, select {
-          font-family: 'DM Mono', monospace;
-          font-size: 12px;
           border: 1px solid #DDD5C8;
-          border-radius: 3px;
-          padding: 8px 12px;
-          color: #1C1A17;
-          background: #FAF8F5;
-          outline: none;
-          width: 100%;
-          box-sizing: border-box;
+          border-radius: 2px;
+          overflow: hidden;
         }
-        input:focus, textarea:focus, select:focus { border-color: #C9B99A; }
-        textarea { resize: vertical; min-height: 72px; }
-        .form-label {
+        .access-btn {
+          font-family: 'DM Mono', monospace;
+          font-size: 9px;
+          letter-spacing: 0.08em;
+          padding: 4px 8px;
+          border: none;
+          background: none;
+          color: #9A8F82;
+          cursor: pointer;
+          transition: all 0.12s;
+          white-space: nowrap;
+        }
+        .access-btn.active-none { background: #1C1A17; color: #F5F2EE; }
+        .access-btn.active-view { background: #6B8C6B; color: #fff; }
+        .access-btn.active-edit { background: #8B6F47; color: #fff; }
+        .access-btn:not([class*="active"]):hover { background: #F5F2EE; }
+        .invite-panel {
+          background: #fff;
+          border: 1px solid #E8E0D5;
+          border-radius: 4px;
+          padding: 28px 32px;
+          margin-bottom: 32px;
+        }
+        .field-label {
           font-family: 'DM Mono', monospace;
           font-size: 10px;
           letter-spacing: 0.1em;
@@ -251,178 +202,201 @@ export default function TeamPage() {
           display: block;
           margin-bottom: 6px;
         }
-        .form-row { margin-bottom: 16px; }
-        .avatar {
-          width: 36px; height: 36px;
-          border-radius: 50%;
-          background: #EDE9E3;
-          display: flex; align-items: center; justify-content: center;
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 16px;
+        .field-input {
+          font-family: 'DM Mono', monospace;
+          font-size: 12px;
+          border: 1px solid #DDD5C8;
+          border-radius: 2px;
+          padding: 8px 12px;
+          color: #1C1A17;
+          background: #FAF8F5;
+          outline: none;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .field-input:focus { border-color: #C9B99A; }
+        .role-select {
+          font-family: 'DM Mono', monospace;
+          font-size: 12px;
+          border: 1px solid #DDD5C8;
+          border-radius: 2px;
+          padding: 8px 12px;
+          color: #1C1A17;
+          background: #FAF8F5;
+          outline: none;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .btn-primary {
+          font-family: 'DM Mono', monospace;
+          font-size: 11px;
+          letter-spacing: 0.06em;
+          padding: 9px 20px;
+          background: #1C1A17;
+          color: #F5F2EE;
+          border: none;
+          border-radius: 2px;
+          cursor: pointer;
+        }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-ghost {
+          font-family: 'DM Mono', monospace;
+          font-size: 11px;
+          letter-spacing: 0.06em;
+          padding: 9px 18px;
+          background: none;
           color: #6B6359;
-          flex-shrink: 0;
+          border: 1px solid #E8E0D5;
+          border-radius: 2px;
+          cursor: pointer;
+        }
+        .btn-ghost:hover { border-color: #C9B99A; color: #1C1A17; }
+        .permissions-grid {
+          border: 1px solid #EDE8E1;
+          border-radius: 3px;
+          overflow: hidden;
+          margin-top: 8px;
+        }
+        .perm-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 16px;
+          border-bottom: 1px solid #EDE8E1;
+        }
+        .perm-row:last-child { border-bottom: none; }
+        .perm-row:nth-child(even) { background: #FAFAF8; }
+        .perm-label {
+          font-family: 'DM Mono', monospace;
+          font-size: 11px;
+          color: #4A4540;
         }
       `}</style>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
         <div>
-          <h1 style={{
-            fontFamily: "'Cormorant Garamond', serif",
-            fontSize: 32, fontWeight: 400, color: '#1C1A17', margin: '0 0 6px',
-          }}>Team</h1>
-          <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82', margin: 0 }}>
-            {people.length} contact{people.length !== 1 ? 's' : ''}
+          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 400, color: '#1C1A17', margin: '0 0 6px' }}>Team</h1>
+          <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', margin: 0 }}>
+            {members.length} member{members.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <button className="btn-ghost" onClick={() => setShowForm(v => !v)}>
-          + Add Person
-        </button>
+        {isOwner && !showInvite && (
+          <button className="btn-ghost" onClick={() => setShowInvite(true)}>+ Invite someone</button>
+        )}
       </div>
 
-      {/* Role filters */}
-      {rolesPresent.length > 1 && (
-        <div className="role-filter">
-          <button
-            className={`filter-btn ${filterRole === null ? 'active' : ''}`}
-            onClick={() => setFilterRole(null)}
-          >All</button>
-          {rolesPresent.map(r => (
-            <button
-              key={r}
-              className={`filter-btn ${filterRole === r ? 'active' : ''}`}
-              onClick={() => setFilterRole(r)}
-            >{r}</button>
-          ))}
+      {/* Success message */}
+      {inviteSuccess && (
+        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#6B8C6B', marginBottom: 20, padding: '10px 16px', background: '#F0F5F0', borderRadius: 3 }}>
+          {inviteSuccess}
         </div>
       )}
 
-      {/* Add form */}
-      {showForm && (
-        <div style={{
-          background: '#fff', border: '1px solid #E8E0D5', borderRadius: 6,
-          padding: '24px 28px', marginBottom: 24,
-        }}>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', marginBottom: 20, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            Add Person
+      {/* Invite panel */}
+      {showInvite && (
+        <div className="invite-panel">
+          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 24 }}>
+            Invite someone
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
             <div>
-              <label className="form-label">Name *</label>
-              <input type="text" placeholder="Full name" value={name} onChange={e => setName(e.target.value)} />
+              <label className="field-label">Email *</label>
+              <input
+                className="field-input"
+                type="email"
+                placeholder="their@email.com"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+              />
             </div>
             <div>
-              <label className="form-label">Role</label>
-              <select value={role} onChange={e => setRole(e.target.value)}>
-                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              <label className="field-label">Role</label>
+              <select className="role-select" value={inviteRole} onChange={e => handleRoleChange(e.target.value)}>
+                {ROLES.map(r => (
+                  <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
+                ))}
               </select>
             </div>
           </div>
 
-          <div className="form-row">
-            <label className="form-label">Company</label>
-            <input type="text" placeholder="Company or firm name" value={company} onChange={e => setCompany(e.target.value)} />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <div>
-              <label className="form-label">Email</label>
-              <input type="text" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+          {/* Permissions — only show if not co-owner */}
+          {inviteRole !== 'co-owner' && (
+            <div style={{ marginBottom: 24 }}>
+              <label className="field-label" style={{ marginBottom: 8 }}>Permissions</label>
+              <div className="permissions-grid">
+                {SECTIONS.map(section => (
+                  <div key={section.key} className="perm-row">
+                    <span className="perm-label">{section.label}</span>
+                    <div className="access-toggle">
+                      {(['none', 'view', 'edit'] as AccessLevel[]).map(level => (
+                        <button
+                          key={level}
+                          className={`access-btn ${permissions[section.key] === level ? `active-${level}` : ''}`}
+                          onClick={() => setPermission(section.key, level)}
+                        >
+                          {level === 'none' ? 'None' : level === 'view' ? 'View' : 'View+Edit'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div>
-              <label className="form-label">Phone</label>
-              <input type="text" placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
+          )}
+
+          {inviteRole === 'co-owner' && (
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#6B8C6B', marginBottom: 24, padding: '10px 16px', background: '#F0F5F0', borderRadius: 3 }}>
+              Co-owners have full access to all sections.
             </div>
-          </div>
+          )}
 
-          <div className="form-row">
-            <label className="form-label">Notes</label>
-            <textarea placeholder="Any useful context…" value={notes} onChange={e => setNotes(e.target.value)} />
-          </div>
-
-          {error && (
-            <div style={{ color: '#C0532A', fontFamily: "'DM Mono', monospace", fontSize: 11, marginBottom: 12 }}>
-              {error}
+          {inviteError && (
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#C0532A', marginBottom: 16 }}>
+              {inviteError}
             </div>
           )}
 
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn-primary" onClick={handleAdd}>Save</button>
-            <button className="btn-ghost" onClick={() => { setShowForm(false); resetForm(); setError(null) }}>Cancel</button>
+            <button className="btn-primary" onClick={handleInvite} disabled={inviteLoading || !inviteEmail.trim()}>
+              {inviteLoading ? 'Sending…' : 'Send invite'}
+            </button>
+            <button className="btn-ghost" onClick={() => { setShowInvite(false); setInviteError('') }}>Cancel</button>
           </div>
         </div>
       )}
 
-      {/* People list grouped by role */}
+      {/* Members list */}
       {loading ? (
         <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82' }}>Loading…</div>
-      ) : people.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 0', fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#B0A89E' }}>
-          No contacts yet. Add your architect, contractor, or vendor above.
+      ) : members.length === 0 ? (
+        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#B0A89E', padding: '60px 0', textAlign: 'center' }}>
+          No team members yet.
         </div>
       ) : (
-        Object.entries(grouped).map(([groupRole, members]) => (
-          <div key={groupRole}>
-            <div className="role-group-label">{groupRole}s</div>
-            {members.map(person => {
-              const isOpen = expanded === person.id
-              const initials = person.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-
-              return (
-                <div key={person.id} className="person-card">
-                  <div className="person-header" onClick={() => setExpanded(isOpen ? null : person.id)}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      <div className="avatar">{initials}</div>
-                      <div>
-                        <div className="person-name">{person.name}</div>
-                        {person.company && <div className="person-company">{person.company}</div>}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      {person.email && (
-                        <a
-                          href={`mailto:${person.email}`}
-                          className="contact-link"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          ✉ {person.email}
-                        </a>
-                      )}
-                      <span style={{ color: '#C9B99A', fontSize: 12 }}>{isOpen ? '▲' : '▼'}</span>
-                    </div>
-                  </div>
-
-                  {isOpen && (
-                    <div className="person-body">
-                      <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: 12 }}>
-                        {person.phone && (
-                          <a href={`tel:${person.phone}`} className="contact-link">
-                            ✆ {person.phone}
-                          </a>
-                        )}
-                        {person.email && (
-                          <a href={`mailto:${person.email}`} className="contact-link">
-                            ✉ {person.email}
-                          </a>
-                        )}
-                      </div>
-                      {person.notes && (
-                        <p style={{
-                          fontFamily: "'DM Mono', monospace", fontSize: 12,
-                          color: '#6B6359', lineHeight: 1.7, margin: '0 0 12px',
-                        }}>{person.notes}</p>
-                      )}
-                      <button className="btn-danger" onClick={() => handleDelete(person.id)}>
-                        Remove
-                      </button>
-                    </div>
-                  )}
+        <div>
+          {members.map(member => (
+            <div key={member.id} className="team-member-row">
+              <div>
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#1C1A17', marginBottom: 2 }}>
+                  {member.invited_email}
                 </div>
-              )
-            })}
-          </div>
-        ))
+                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#9A8F82', letterSpacing: '0.08em' }}>
+                  {member.role} · {statusLabel[member.status] ?? member.status}
+                </div>
+              </div>
+              {isOwner && member.role !== 'owner' && (
+                <button
+                  onClick={() => handleRevoke(member.id)}
+                  style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#C0532A', background: 'none', border: 'none', cursor: 'pointer', letterSpacing: '0.05em' }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
