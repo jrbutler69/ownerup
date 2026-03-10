@@ -6,7 +6,6 @@ import type { NextRequest } from 'next/server'
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  const next = requestUrl.searchParams.get('next') ?? '/'
 
   if (code) {
     const cookieStore = await cookies()
@@ -28,8 +27,25 @@ export async function GET(request: NextRequest) {
     )
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
+
     if (!error) {
-      return NextResponse.redirect(new URL(next, requestUrl.origin))
+      // Check if this user already has a project
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: projects } = await supabase
+          .from('projects')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1)
+
+        // New user with no project → send to onboarding
+        if (!projects || projects.length === 0) {
+          return NextResponse.redirect(new URL('/onboarding', requestUrl.origin))
+        }
+      }
+
+      // Existing user with a project → send to home
+      return NextResponse.redirect(new URL('/', requestUrl.origin))
     }
   }
 

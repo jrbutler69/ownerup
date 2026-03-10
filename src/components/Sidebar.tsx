@@ -36,10 +36,10 @@ export default function Sidebar() {
       <nav className="sidebar-nav">
         <div className="nav-spacer" />
 
-        {/* Home */}
+       {/* Home */}
         <button
-          className={`nav-item ${pathname === '/' ? 'active' : ''}`}
-          onClick={() => router.push('/')}
+          className={`nav-item ${pathname === '/home' ? 'active' : ''}`}
+          onClick={() => router.push('/home')}
         >
           <span className="nav-label">Home</span>
         </button>

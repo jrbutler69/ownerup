@@ -88,17 +88,20 @@ export default function LoginPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-              />
-            </div>
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+    <span style={{ fontSize: '10px', fontWeight: 400, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Password</span>
+    <a href="/reset-password" style={{ fontSize: '11px', color: '#C9B99A', textDecoration: 'none', fontFamily: '"DM Mono", monospace' }}>Forgot password?</a>
+  </div>
+  <input
+    id="password"
+    type="password"
+    value={password}
+    onChange={e => setPassword(e.target.value)}
+    placeholder="••••••••"
+    required
+    autoComplete="current-password"
+  />
+</div>
 
             {error && <p className="error-msg">{error}</p>}
 
@@ -110,6 +113,10 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+        <p style={{ fontFamily: '"DM Mono", monospace', fontSize: '11px', color: '#888', marginTop: '24px', textAlign: 'center' }}>
+          Don't have an account?{' '}
+          <a href="/signup" style={{ color: '#C9B99A', textDecoration: 'none' }}>Sign up</a>
+        </p>
         </div>
       </div>
 
