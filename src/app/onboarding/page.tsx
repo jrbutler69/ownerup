@@ -1,73 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
-import { useRouter } from 'next/navigation'
+import { createProject } from '@/actions/projects'
 
 export default function OnboardingPage() {
-  const [name, setName] = useState('')
-  const [address, setAddress] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [targetCompletion, setTargetCompletion] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const router = useRouter()
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
     setLoading(true)
-
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      setError('Not authenticated. Please log in again.')
+    try {
+      const formData = new FormData(e.currentTarget)
+      await createProject(formData)
+    } catch (err: any) {
+      setError(err.message)
       setLoading(false)
-      return
     }
-
-    const { data: project, error } = await supabase
-      .from('projects')
-      .insert({
-        user_id: user.id,
-        name,
-        address,
-        start_date: startDate || null,
-        target_completion: targetCompletion || null,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-      return
-    }
-
-    // Add creator as owner in project_members
-    const { error: memberError } = await supabase
-      .from('project_members')
-      .insert({
-        project_id: project.id,
-        user_id: user.id,
-        role: 'owner',
-        status: 'active',
-      })
-
-    if (memberError) {
-      setError(memberError.message)
-      setLoading(false)
-      return
-    }
-
-    router.push('/home')
-    router.refresh()
   }
 
   return (
@@ -83,8 +33,7 @@ export default function OnboardingPage() {
             <label style={styles.label}>PROJECT NAME <span style={styles.required}>*</span></label>
             <input
               type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
+              name="name"
               required
               style={styles.input}
               placeholder="e.g. Germantown House"
@@ -95,8 +44,7 @@ export default function OnboardingPage() {
             <label style={styles.label}>ADDRESS <span style={styles.required}>*</span></label>
             <input
               type="text"
-              value={address}
-              onChange={e => setAddress(e.target.value)}
+              name="address"
               required
               style={styles.input}
               placeholder="e.g. 123 Main St, Germantown, NY"
@@ -108,8 +56,7 @@ export default function OnboardingPage() {
               <label style={styles.label}>START DATE</label>
               <input
                 type="date"
-                value={startDate}
-                onChange={e => setStartDate(e.target.value)}
+                name="startDate"
                 style={styles.input}
               />
             </div>
@@ -118,8 +65,7 @@ export default function OnboardingPage() {
               <label style={styles.label}>TARGET COMPLETION</label>
               <input
                 type="date"
-                value={targetCompletion}
-                onChange={e => setTargetCompletion(e.target.value)}
+                name="targetCompletion"
                 style={styles.input}
               />
             </div>
