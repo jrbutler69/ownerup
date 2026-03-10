@@ -66,24 +66,20 @@ export default function RenderingsPage() {
       if (!user) return
 
       const { data: memberRows } = await supabase
-  .from('project_members').select('project_id')
-  .eq('user_id', user.id).eq('status', 'active').limit(1)
-if (!memberRows?.length) return
-const pid = memberRows[0].project_id
-setProjectId(pid)
-const { data } = await supabase
-  .from('photos').select('*').eq('project_id', pid)
-  .order('taken_at', { ascending: false })
-if (data) setPhotos(data)
-setLoading(false)
+        .from('project_members')
+        .select('project_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
 
-      if (!project) return
-      setProjectId(project.id)
+      if (!memberRows?.length) return
+      const pid = memberRows[0].project_id
+      setProjectId(pid)
 
       const { data } = await supabase
         .from('renderings')
         .select('*')
-        .eq('project_id', project.id)
+        .eq('project_id', pid)
         .order('taken_at', { ascending: false })
 
       if (data) {
@@ -272,82 +268,32 @@ setLoading(false)
         .week-label:first-child { margin-top: 0; }
       `}</style>
 
-      {/* Header */}
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{
-          fontFamily: "'Cormorant Garamond', serif",
-          fontSize: 32,
-          fontWeight: 400,
-          color: '#1C1A17',
-          margin: '0 0 6px',
-        }}>Renderings</h1>
-        <p style={{
-          fontFamily: "'DM Mono', monospace",
-          fontSize: 12,
-          color: '#9A8F82',
-          margin: 0,
-        }}>
+        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 400, color: '#1C1A17', margin: '0 0 6px' }}>Renderings</h1>
+        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82', margin: 0 }}>
           {renderings.length} rendering{renderings.length !== 1 ? 's' : ''} · grouped by week
         </p>
       </div>
 
-      {/* Upload zone */}
-      <div
-        className="upload-zone"
-        onDrop={handleDrop}
-        onDragOver={e => e.preventDefault()}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,.pdf"
-          multiple
-          style={{ display: 'none' }}
-          onChange={e => e.target.files && handleUpload(e.target.files)}
-        />
-        <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
-          fontSize: 20,
-          color: '#6B6359',
-          marginBottom: 6,
-        }}>
+      <div className="upload-zone" onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}>
+        <input ref={fileInputRef} type="file" accept="image/*,.pdf" multiple style={{ display: 'none' }}
+          onChange={e => e.target.files && handleUpload(e.target.files)} />
+        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 6 }}>
           {uploading ? 'Uploading…' : 'Drop renderings here or click to upload'}
         </div>
-        <div style={{
-          fontFamily: "'DM Mono', monospace",
-          fontSize: 11,
-          color: '#B0A89E',
-        }}>
+        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E' }}>
           JPG, PNG, PDF · multiple files supported
         </div>
       </div>
 
       {error && (
-        <div style={{
-          background: '#FDF0ED',
-          border: '1px solid #E8856A',
-          borderRadius: 4,
-          padding: '10px 16px',
-          fontFamily: "'DM Mono', monospace",
-          fontSize: 12,
-          color: '#C0532A',
-          marginBottom: 24,
-        }}>{error}</div>
+        <div style={{ background: '#FDF0ED', border: '1px solid #E8856A', borderRadius: 4, padding: '10px 16px', fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#C0532A', marginBottom: 24 }}>{error}</div>
       )}
 
       {loading ? (
-        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82' }}>
-          Loading renderings…
-        </div>
+        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82' }}>Loading renderings…</div>
       ) : grouped.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '60px 0',
-          fontFamily: "'Cormorant Garamond', serif",
-          fontSize: 20,
-          color: '#B0A89E',
-        }}>
+        <div style={{ textAlign: 'center', padding: '60px 0', fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#B0A89E' }}>
           No renderings yet. Upload your first rendering above.
         </div>
       ) : (
@@ -356,15 +302,9 @@ setLoading(false)
             <div className="week-label">{group.label}</div>
             <div className="rendering-grid">
               {group.renderings.map(rendering => (
-                <div
-                  key={rendering.id}
-                  className="rendering-thumb"
-                  onClick={() => setLightbox(rendering)}
-                >
+                <div key={rendering.id} className="rendering-thumb" onClick={() => setLightbox(rendering)}>
                   <img src={rendering.image_url} alt={rendering.caption || 'Rendering'} />
-                  {rendering.caption && (
-                    <div className="caption-overlay">{rendering.caption}</div>
-                  )}
+                  {rendering.caption && <div className="caption-overlay">{rendering.caption}</div>}
                 </div>
               ))}
             </div>
@@ -372,25 +312,12 @@ setLoading(false)
         ))
       )}
 
-      {/* Lightbox */}
       {lightbox && (
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
-          <button
-            className="lightbox-delete"
-            onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}
-          >
-            Delete
-          </button>
-          <img
-            className="lightbox-img"
-            src={lightbox.image_url}
-            alt={lightbox.caption || 'Rendering'}
-            onClick={e => e.stopPropagation()}
-          />
-          {lightbox.caption && (
-            <div className="lightbox-caption">{lightbox.caption}</div>
-          )}
+          <button className="lightbox-delete" onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}>Delete</button>
+          <img className="lightbox-img" src={lightbox.image_url} alt={lightbox.caption || 'Rendering'} onClick={e => e.stopPropagation()} />
+          {lightbox.caption && <div className="lightbox-caption">{lightbox.caption}</div>}
         </div>
       )}
     </div>
