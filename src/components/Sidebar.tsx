@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { switchProject } from '@/actions/projects'
 
@@ -16,9 +16,11 @@ interface Project {
 interface SidebarProps {
   allProjects: Project[]
   selectedProjectId: string
+  userRole: string
+  permissions: Record<string, string>
 }
 
-export default function Sidebar({ allProjects, selectedProjectId }: SidebarProps) {
+function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -28,6 +30,24 @@ export default function Sidebar({ allProjects, selectedProjectId }: SidebarProps
   const isDocuments = pathname.startsWith('/documents')
   const activeCategory = searchParams.get('category')
   const currentProject = allProjects.find(p => p.id === selectedProjectId) ?? allProjects[0]
+
+  const isOwnerOrCoOwner = ['owner', 'co-owner'].includes(userRole)
+
+  function getAccess(section: string): string {
+    if (isOwnerOrCoOwner) return 'edit'
+    return permissions[section] ?? 'none'
+  }
+
+  function getDocCategoryAccess(cat: string): string {
+    const key = `documents_${cat.toLowerCase()}`
+    return getAccess(key)
+  }
+
+  // Returns true if user has any document access at all
+  function hasAnyDocAccess(): boolean {
+    if (isOwnerOrCoOwner) return true
+    return DOC_CATEGORIES.some(cat => getDocCategoryAccess(cat) !== 'none')
+  }
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -39,6 +59,22 @@ export default function Sidebar({ allProjects, selectedProjectId }: SidebarProps
     setShowSwitcher(false)
     router.push('/home')
     router.refresh()
+  }
+
+  function NavButton({ label, path, section }: { label: string, path: string, section: string }) {
+    const access = getAccess(section)
+    const isActive = pathname === path
+    const isDisabled = access === 'none'
+
+    return (
+      <button
+        className={`nav-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
+        onClick={() => !isDisabled && router.push(path)}
+        title={isDisabled ? 'You don\'t have access to this section' : undefined}
+      >
+        <span className="nav-label">{label}</span>
+      </button>
+    )
   }
 
   return (
@@ -88,7 +124,7 @@ export default function Sidebar({ allProjects, selectedProjectId }: SidebarProps
       </div>
 
       <nav className="sidebar-nav">
-        {/* Home */}
+        {/* Home — always accessible */}
         <button
           className={`nav-item ${pathname === '/home' ? 'active' : ''}`}
           onClick={() => router.push('/home')}
@@ -98,56 +134,34 @@ export default function Sidebar({ allProjects, selectedProjectId }: SidebarProps
 
         {/* Documents */}
         <button
-          className={`nav-item ${isDocuments && !activeCategory ? 'active' : ''}`}
-          onClick={() => router.push('/documents')}
+          className={`nav-item ${isDocuments && !activeCategory ? 'active' : ''} ${!hasAnyDocAccess() ? 'disabled' : ''}`}
+          onClick={() => hasAnyDocAccess() && router.push('/documents')}
         >
           <span className="nav-label">Documents</span>
         </button>
 
         {/* Document categories */}
         <div className="doc-categories">
-          {DOC_CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              className={`doc-cat-item ${activeCategory === cat ? 'cat-active' : ''}`}
-              onClick={() => router.push(`/documents?category=${encodeURIComponent(cat)}`)}
-            >
-              {cat}
-            </button>
-          ))}
+          {DOC_CATEGORIES.map(cat => {
+            const access = getDocCategoryAccess(cat)
+            const isDisabled = access === 'none'
+            return (
+              <button
+                key={cat}
+                className={`doc-cat-item ${activeCategory === cat ? 'cat-active' : ''} ${isDisabled ? 'cat-disabled' : ''}`}
+                onClick={() => !isDisabled && router.push(`/documents?category=${encodeURIComponent(cat)}`)}
+                title={isDisabled ? 'You don\'t have access to this section' : undefined}
+              >
+                {cat}
+              </button>
+            )
+          })}
         </div>
 
-        {/* Photos */}
-        <button
-          className={`nav-item ${pathname === '/photos' ? 'active' : ''}`}
-          onClick={() => router.push('/photos')}
-        >
-          <span className="nav-label">Photos</span>
-        </button>
-
-        {/* Renderings */}
-        <button
-          className={`nav-item ${pathname === '/renderings' ? 'active' : ''}`}
-          onClick={() => router.push('/renderings')}
-        >
-          <span className="nav-label">Renderings</span>
-        </button>
-
-        {/* Notes */}
-        <button
-          className={`nav-item ${pathname === '/notes' ? 'active' : ''}`}
-          onClick={() => router.push('/notes')}
-        >
-          <span className="nav-label">Notes</span>
-        </button>
-
-        {/* Team */}
-        <button
-          className={`nav-item ${pathname === '/team' ? 'active' : ''}`}
-          onClick={() => router.push('/team')}
-        >
-          <span className="nav-label">Team</span>
-        </button>
+        <NavButton label="Photos" path="/photos" section="photos" />
+        <NavButton label="Renderings" path="/renderings" section="renderings" />
+        <NavButton label="Notes" path="/notes" section="notes" />
+        <NavButton label="Team" path="/team" section="team" />
       </nav>
 
       <div className="sidebar-bottom">
@@ -213,7 +227,6 @@ export default function Sidebar({ allProjects, selectedProjectId }: SidebarProps
           line-height: 1.4;
         }
 
-        /* Project switcher */
         .project-switcher {
           position: relative;
           border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -275,10 +288,7 @@ export default function Sidebar({ allProjects, selectedProjectId }: SidebarProps
         }
 
         .project-option:hover { color: #E8E3DC; }
-
-        .project-option-active {
-          color: #C9B99A;
-        }
+        .project-option-active { color: #C9B99A; }
 
         .project-divider {
           border-top: 1px solid rgba(255,255,255,0.06);
@@ -329,12 +339,17 @@ export default function Sidebar({ allProjects, selectedProjectId }: SidebarProps
           margin-top: 8px;
         }
 
-        .nav-item:hover { color: #9E9890; }
+        .nav-item:hover:not(.disabled) { color: #9E9890; }
 
         .nav-item.active {
           color: #E8E3DC;
           background: rgba(201,185,154,0.07);
           border-left-color: #C9B99A;
+        }
+
+        .nav-item.disabled {
+          color: #2E2C28;
+          cursor: default;
         }
 
         .doc-categories {
@@ -360,11 +375,16 @@ export default function Sidebar({ allProjects, selectedProjectId }: SidebarProps
           transition: color 0.15s;
         }
 
-        .doc-cat-item:hover { color: #7A7268; }
+        .doc-cat-item:hover:not(.cat-disabled) { color: #7A7268; }
 
         .doc-cat-item.cat-active {
           color: #C9B99A;
           border-left-color: #C9B99A;
+        }
+
+        .doc-cat-item.cat-disabled {
+          color: #2A2825;
+          cursor: default;
         }
 
         .sidebar-bottom {
@@ -388,5 +408,13 @@ export default function Sidebar({ allProjects, selectedProjectId }: SidebarProps
         .sign-out:hover { color: #6A6358; }
       `}</style>
     </aside>
+  )
+}
+
+export default function Sidebar(props: SidebarProps) {
+  return (
+    <Suspense fallback={<div style={{ width: 200, background: '#151412', minHeight: '100vh' }} />}>
+      <SidebarInner {...props} />
+    </Suspense>
   )
 }

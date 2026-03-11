@@ -9,7 +9,6 @@ export default async function AppLayout({
   children: React.ReactNode
 }) {
   const cookieStore = await cookies()
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -22,17 +21,15 @@ export default async function AppLayout({
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-
   if (!user) redirect('/login')
 
   const { data: memberRows } = await supabase
     .from('project_members')
-    .select('project_id')
+    .select('project_id, role')
     .eq('user_id', user.id)
     .eq('status', 'active')
 
   const projectIds = (memberRows ?? []).map(r => r.project_id)
-
   if (projectIds.length === 0) redirect('/onboarding')
 
   const { data: projectsData } = await supabase
@@ -44,9 +41,31 @@ export default async function AppLayout({
   const selectedId = cookieStore.get('selected_project_id')?.value
   const project = allProjects.find(p => p.id === selectedId) ?? allProjects[0]
 
+  // Get user's role for the selected project
+  const memberRow = memberRows?.find(r => r.project_id === project?.id)
+  const userRole = memberRow?.role ?? 'other'
+
+  // Owners and co-owners get full access — skip permissions fetch
+  let permissions: Record<string, string> = {}
+  if (!['owner', 'co-owner'].includes(userRole)) {
+    const { data: permRows } = await supabase
+      .from('project_permissions')
+      .select('section, access_level')
+      .eq('project_id', project?.id)
+      .eq('user_id', user.id)
+    for (const row of permRows ?? []) {
+      permissions[row.section] = row.access_level
+    }
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <Sidebar allProjects={allProjects} selectedProjectId={project?.id ?? ''} />
+      <Sidebar
+        allProjects={allProjects}
+        selectedProjectId={project?.id ?? ''}
+        userRole={userRole}
+        permissions={permissions}
+      />
       <div style={{ marginLeft: '200px', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <header style={{ padding: '48px 48px 0', fontFamily: "'DM Mono', monospace" }}>
           <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
