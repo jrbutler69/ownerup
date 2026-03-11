@@ -10,6 +10,7 @@ interface Photo {
   uploaded_at: string
   image_url: string
   caption: string | null
+  uploaded_by: string | null
 }
 
 interface GroupedPhotos {
@@ -72,6 +73,8 @@ export default function PhotosPage() {
   const [lightbox, setLightbox] = useState<Photo | null>(null)
   const [lightboxGroup, setLightboxGroup] = useState<Photo[]>([])
   const [projectId, setProjectId] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [memberEmails, setMemberEmails] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [openVisit, setOpenVisit] = useState<string | null>(null)
@@ -84,16 +87,36 @@ export default function PhotosPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      setCurrentUserId(user.id)
+
       const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
       const { data: memberRows } = await supabase
-        .from('project_members').select('project_id, role').eq('user_id', user.id).eq('status', 'active')
+        .from('project_members').select('project_id, role, user_id, invited_email').eq('status', 'active')
       if (!memberRows?.length) return
-      const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid) ? cookiePid : memberRows[0].project_id
+
+      const myRows = memberRows.filter((r: any) => r.user_id === user.id)
+      if (!myRows.length) return
+      const pid = cookiePid && myRows.some((r: any) => r.project_id === cookiePid) ? cookiePid : myRows[0].project_id
       setProjectId(pid)
+
+      // Build user_id -> email map from project_members
+      const projectMembers = memberRows.filter((r: any) => r.project_id === pid)
+      const emailMap: Record<string, string> = {}
+      for (const m of projectMembers) {
+        if (m.user_id && m.invited_email) emailMap[m.user_id] = m.invited_email
+      }
+      // Owner row may have null invited_email — use auth email if it's the current user
+      const ownerRow = projectMembers.find((r: any) => r.role === 'owner')
+      if (ownerRow?.user_id && !emailMap[ownerRow.user_id] && ownerRow.user_id === user.id) {
+        emailMap[ownerRow.user_id] = user.email ?? ''
+      }
+      setMemberEmails(emailMap)
+
       const { data } = await supabase.from('photos').select('*').eq('project_id', pid).order('taken_at', { ascending: false })
       if (data) setPhotos(data)
       setLoading(false)
-      const memberRow = memberRows.find(r => r.project_id === pid)
+
+      const memberRow = myRows.find((r: any) => r.project_id === pid)
       const role = memberRow?.role ?? 'other'
       if (['owner', 'co-owner'].includes(role)) {
         setHasAnyAccess(true)
@@ -109,7 +132,7 @@ export default function PhotosPage() {
   }, [])
 
   async function handleUpload(files: FileList) {
-    if (!projectId || files.length === 0) return
+    if (!projectId || !currentUserId || files.length === 0) return
     setUploading(true)
     setError(null)
     const newPhotos: Photo[] = []
@@ -120,9 +143,12 @@ export default function PhotosPage() {
       if (uploadError) { setError(`Upload failed: ${uploadError.message}`); continue }
       const { data: { publicUrl } } = supabase.storage.from('photos').getPublicUrl(filename)
       const { data: newPhoto, error: dbError } = await supabase.from('photos').insert({
-        project_id: projectId, image_url: publicUrl,
+        project_id: projectId,
+        image_url: publicUrl,
         taken_at: new Date(visitDate + 'T12:00:00').toISOString(),
-        uploaded_at: new Date().toISOString(), caption: null,
+        uploaded_at: new Date().toISOString(),
+        caption: null,
+        uploaded_by: currentUserId,
       }).select().single()
       if (dbError) { setError(`DB error: ${dbError.message}`) }
       else if (newPhoto) newPhotos.push(newPhoto)
@@ -154,6 +180,15 @@ export default function PhotosPage() {
     if (next) setLightbox(next)
   }
 
+  function uploaderLabel(groupPhotos: Photo[]): string | null {
+    const uploaderIds = [...new Set(groupPhotos.map(p => p.uploaded_by).filter(Boolean))] as string[]
+    if (uploaderIds.length === 0) return null
+    const emails = uploaderIds.map(id => memberEmails[id] ?? id)
+    if (emails.length === 1) return emails[0]
+    if (emails.length === 2) return `${emails[0]} & ${emails[1]}`
+    return `${emails[0]} +${emails.length - 1} others`
+  }
+
   const weekGroups = groupByWeek(photos)
   const dayGroups = groupByDay(photos)
   const openVisitGroup = dayGroups.find(g => g.key === openVisit)
@@ -172,6 +207,7 @@ export default function PhotosPage() {
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=DM+Mono:wght@300;400&display=swap');
         .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
         .photo-thumb { aspect-ratio: 1; overflow: hidden; border-radius: 4px; cursor: pointer; position: relative; background: #EDE9E3; }
         .photo-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s ease; }
@@ -185,12 +221,15 @@ export default function PhotosPage() {
         .visits-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
         .visit-folder { background: #fff; border: 1px solid #E8E0D5; border-radius: 4px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; overflow: hidden; }
         .visit-folder:hover { border-color: #C9B99A; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
-        .visit-thumb-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; height: 120px; background: #EDE9E3; }
-        .visit-thumb-strip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .visit-thumb-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; height: 120px; background: #EDE9E3; overflow: hidden; }
+        .visit-thumb-strip > div { position: relative; overflow: hidden; height: 120px; }
+        .visit-thumb-strip img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
         .visit-thumb-blank { background: #EDE9E3; }
         .visit-info { padding: 14px 16px; }
-        .visit-date { font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 400; color: #1C1A17; margin: 0 0 4px; }
-        .visit-count { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #9A8F82; }
+        .visit-info-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: 4px; }
+        .visit-date { font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 400; color: #1C1A17; margin: 0; }
+        .visit-count { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #9A8F82; margin: 0; white-space: nowrap; }
+        .visit-uploader { font-family: 'DM Mono', monospace; font-size: 9px; color: #B0A89E; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
         .visit-back { display: flex; align-items: center; gap: 8px; background: none; border: none; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #9A8F82; cursor: pointer; padding: 0; margin-bottom: 24px; transition: color 0.15s; }
         .visit-back:hover { color: #1C1A17; }
         .lightbox-overlay { position: fixed; inset: 0; background: rgba(28,26,23,0.94); z-index: 1000; display: flex; align-items: center; justify-content: center; }
@@ -277,15 +316,19 @@ export default function PhotosPage() {
         <div className="visits-grid">
           {dayGroups.map(group => {
             const thumbs = group.photos.slice(0, 3)
+            const uploader = uploaderLabel(group.photos)
             return (
               <div key={group.key} className="visit-folder" onClick={() => setOpenVisit(group.key)}>
                 <div className="visit-thumb-strip">
-                  {thumbs.map(p => <img key={p.id} src={p.image_url} alt="" />)}
+                  {thumbs.map(p => <div key={p.id}><img src={p.image_url} alt="" /></div>)}
                   {Array.from({ length: 3 - thumbs.length }).map((_, i) => <div key={i} className="visit-thumb-blank" />)}
                 </div>
                 <div className="visit-info">
                   <p className="visit-date">{group.label}</p>
-                  <p className="visit-count">{group.sublabel}</p>
+                  <div className="visit-info-row">
+                    <p className="visit-count">{group.sublabel}</p>
+                    {uploader && <span className="visit-uploader">{uploader}</span>}
+                  </div>
                 </div>
               </div>
             )
