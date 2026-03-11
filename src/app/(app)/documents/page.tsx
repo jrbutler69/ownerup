@@ -36,6 +36,7 @@ export default function DocumentsPage() {
   const [canEdit, setCanEdit] = useState(false)
   const [hasAnyAccess, setHasAnyAccess] = useState(true)
   const [editableCategories, setEditableCategories] = useState<Set<string>>(new Set())
+  const [categoryAccess, setCategoryAccess] = useState<Record<string, string>>({})
   const [batchCategory, setBatchCategory] = useState(urlCategory && CATEGORIES.includes(urlCategory) ? urlCategory : 'Contracts')
   const [batchSubcategory, setBatchSubcategory] = useState('Architect')
   const [batchVersion, setBatchVersion] = useState('v1')
@@ -60,17 +61,21 @@ export default function DocumentsPage() {
       const role = memberRow?.role ?? 'other'
       if (['owner', 'co-owner'].includes(role)) {
         setHasAnyAccess(true); setCanEdit(true); setEditableCategories(new Set(CATEGORIES))
+        setCategoryAccess(Object.fromEntries(CATEGORIES.map(c => [c, 'edit'])))
       } else {
         const { data: perms } = await supabase.rpc('get_my_permissions', { p_project_id: pid })
         const editableCats = new Set<string>()
+        const access: Record<string, string> = {}
         let anyAccess = false
         for (const cat of CATEGORIES) {
           const key = `documents_${cat.toLowerCase()}`
           const level = perms?.find((p: any) => p.section === key)?.access_level ?? 'none'
+          access[cat] = level
           if (level !== 'none') anyAccess = true
           if (level === 'edit') editableCats.add(cat)
         }
         setHasAnyAccess(anyAccess)
+        setCategoryAccess(access)
         setEditableCategories(editableCats)
         setCanEdit(editableCats.size > 0)
       }
@@ -171,6 +176,20 @@ export default function DocumentsPage() {
         </p>
       </div>
     )
+  }
+
+  if (!loading && activeCategory !== 'All' && Object.keys(categoryAccess).length > 0) {
+    const level = categoryAccess[activeCategory] ?? 'none'
+    if (level === 'none') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
+          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 300, color: '#1C1A17', margin: '0 0 12px' }}>No access</h1>
+          <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', letterSpacing: '0.08em', margin: 0 }}>
+            You don't have access to {activeCategory}. Contact the project owner if you need access.
+          </p>
+        </div>
+      )
+    }
   }
 
   return (
