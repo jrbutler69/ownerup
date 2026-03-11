@@ -88,16 +88,16 @@ export default function PhotosPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+     const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
       const { data: memberRows } = await supabase
         .from('project_members')
         .select('project_id')
         .eq('user_id', user.id)
         .eq('status', 'active')
-        .limit(1)
-
       if (!memberRows?.length) return
-      const pid = memberRows[0].project_id
-      setProjectId(pid)
+      const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid)
+        ? cookiePid
+        : memberRows[0].project_id
 
       const { data } = await supabase
         .from('photos')

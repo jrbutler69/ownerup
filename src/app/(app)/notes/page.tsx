@@ -24,12 +24,19 @@ export default function NotesPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: project } = await supabase
-        .from('projects').select('id').eq('user_id', user.id).single()
-      if (!project) return
-      setProjectId(project.id)
+      const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
+      const { data: memberRows } = await supabase
+        .from('project_members')
+        .select('project_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+      if (!memberRows?.length) return
+      const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid)
+        ? cookiePid
+        : memberRows[0].project_id
+      setProjectId(pid)
       const { data } = await supabase
-        .from('notes').select('*').eq('project_id', project.id)
+        .from('notes').select('*').eq('project_id', pid)
         .order('created_at', { ascending: false })
       setNotes(data ?? [])
       setLoading(false)
