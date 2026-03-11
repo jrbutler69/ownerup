@@ -47,6 +47,8 @@ export default function DocumentsPage() {
   const [projectId, setProjectId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [canEdit, setCanEdit] = useState(false)
+  const [editableCategories, setEditableCategories] = useState<Set<string>>(new Set())
 
   const [batchCategory, setBatchCategory] = useState(
     urlCategory && CATEGORIES.includes(urlCategory) ? urlCategory : 'Contracts'
@@ -66,19 +68,61 @@ export default function DocumentsPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: projects } = await supabase
-        .from('projects').select('id').eq('user_id', user.id).limit(1)
-      if (!projects?.length) return
-      const pid = projects[0].id
+
+      const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
+      const { data: memberRows } = await supabase
+        .from('project_members')
+        .select('project_id, role')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+      if (!memberRows?.length) return
+      const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid)
+        ? cookiePid
+        : memberRows[0].project_id
+
       setProjectId(pid)
+
       const { data: docs } = await supabase
         .from('documents').select('*').eq('project_id', pid)
         .order('upload_date', { ascending: false })
       setDocuments(docs ?? [])
       setLoading(false)
+
+      // Determine permissions
+      const memberRow = memberRows.find(r => r.project_id === pid)
+      const role = memberRow?.role ?? 'other'
+      if (['owner', 'co-owner'].includes(role)) {
+        setCanEdit(true)
+        setEditableCategories(new Set(CATEGORIES))
+      } else {
+        const { data: perms } = await supabase.rpc('get_my_permissions', { p_project_id: pid })
+        const editableCats = new Set<string>()
+        for (const cat of CATEGORIES) {
+          const key = `documents_${cat.toLowerCase()}`
+          const level = perms?.find((p: any) => p.section === key)?.access_level ?? 'none'
+          if (level === 'edit') editableCats.add(cat)
+        }
+        setEditableCategories(editableCats)
+        setCanEdit(editableCats.size > 0)
+      }
     }
     load()
   }, [])
+
+  // When opening upload modal, default batchCategory to first editable category
+  function openUploadModal() {
+    if (urlCategory && editableCategories.has(urlCategory)) {
+      setBatchCategory(urlCategory)
+    } else {
+      const firstEditable = CATEGORIES.find(c => editableCategories.has(c))
+      if (firstEditable) setBatchCategory(firstEditable)
+    }
+    setShowUpload(true)
+  }
+
+  function canEditCategory(cat: string): boolean {
+    return editableCategories.has(cat)
+  }
 
   function addFiles(files: FileList | File[]) {
     const newItems: QueuedFile[] = Array.from(files).map(f => ({
@@ -211,6 +255,9 @@ export default function DocumentsPage() {
   const doneCount = queue.filter(f => f.status === 'done').length
   const needsSubcategory = SUBCATEGORY_CATEGORIES.includes(batchCategory)
 
+  // Categories available for upload (only editable ones)
+  const uploadableCategories = CATEGORIES.filter(c => editableCategories.has(c))
+
   function closeModal() {
     if (uploading) return
     setShowUpload(false)
@@ -224,7 +271,9 @@ export default function DocumentsPage() {
         <h1 className="docs-title">
           {activeCategory === 'All' ? 'Documents' : activeCategory}
         </h1>
-        <button className="upload-btn" onClick={() => setShowUpload(true)}>+ Upload</button>
+        {canEdit && (
+          <button className="upload-btn" onClick={openUploadModal}>+ Upload</button>
+        )}
       </div>
 
       {loading ? (
@@ -233,7 +282,9 @@ export default function DocumentsPage() {
         <div className="empty-state">
           <p className="empty-title">No documents yet</p>
           <p className="empty-sub">Upload your first document to get started.</p>
-          <button className="upload-btn" onClick={() => setShowUpload(true)}>+ Upload document</button>
+          {canEdit && (
+            <button className="upload-btn" onClick={openUploadModal}>+ Upload document</button>
+          )}
         </div>
       ) : filtered.length === 0 ? (
         <p className="state-msg">No documents in this category.</p>
@@ -257,10 +308,12 @@ export default function DocumentsPage() {
                       </span>
                       <span className="doc-arrow">→</span>
                     </a>
-                    <button className="doc-delete" onClick={() => handleDelete(doc)}
-                      disabled={deletingId === doc.id} title="Delete document">
-                      {deletingId === doc.id ? '…' : '✕'}
-                    </button>
+                    {canEditCategory(doc.category) && (
+                      <button className="doc-delete" onClick={() => handleDelete(doc)}
+                        disabled={deletingId === doc.id} title="Delete document">
+                        {deletingId === doc.id ? '…' : '✕'}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -282,7 +335,7 @@ export default function DocumentsPage() {
                 <div className="field">
                   <label>Category</label>
                   <select value={batchCategory} onChange={e => setBatchCategory(e.target.value)} disabled={uploading}>
-                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                    {uploadableCategories.map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="field">
