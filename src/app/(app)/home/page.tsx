@@ -156,9 +156,9 @@ function OverviewContent({ data, loading, router, permissions, project, members 
           {loading ? <p className="empty-state">Loading…</p>
             : data.documents.length === 0 ? <p className="empty-state">No documents yet</p>
             : data.documents.map((doc: any) => (
-              <a key={doc.id} href={doc.file_url} target="_blank" rel="noopener noreferrer" className="row">
-                <span className="row-name">{doc.title}</span>
-                <span className="row-meta">{formatDate(doc.upload_date)}</span>
+              <a key={doc.id} href={doc.file_url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #F0EBE4", gap: "16px", textDecoration: "none", color: "inherit" }}>
+                <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "17px", fontWeight: 400, color: "#1A1814", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{doc.title}</span>
+                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.08em", color: "#B0A898", whiteSpace: "nowrap", flexShrink: 0 }}>{formatDate(doc.upload_date)}</span>
               </a>
             ))}
         </div>
@@ -203,9 +203,9 @@ function OverviewContent({ data, loading, router, permissions, project, members 
           {loading ? <p className="empty-state">Loading…</p>
             : data.notes.length === 0 ? <p className="empty-state">No notes yet</p>
             : data.notes.map((note: any) => (
-              <div key={note.id} className="row">
-                <span className="row-name note-body">{note.body}</span>
-                <span className="row-meta">{formatDate(note.created_at)}</span>
+              <div key={note.id} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #F0EBE4", gap: "16px" }}>
+                <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "17px", fontWeight: 400, color: "#1A1814", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{note.body}</span>
+                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.08em", color: "#B0A898", whiteSpace: "nowrap", flexShrink: 0 }}>{formatDate(note.created_at)}</span>
               </div>
             ))}
         </div>
