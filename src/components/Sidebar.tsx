@@ -80,7 +80,16 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
         textTransform: 'uppercase' as const,
         fontWeight: 400,
         opacity: isDisabled ? 0.4 : 1,
+        textAlign: 'left' as const,
+        marginTop: '8px',
+        padding: '10px 24px',
+        width: '100%',
       }}
+```
+
+Save and run:
+```
+git add . && git commit -m "fix nav item styling" && git push
     >
       {label}
     </button>
