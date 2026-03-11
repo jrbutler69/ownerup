@@ -68,11 +68,13 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
   const isDisabled = access === 'none'
 
   return (
-    <button
+   <button
       className={`nav-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
       onClick={() => !isDisabled && router.push(path)}
       title={isDisabled ? 'You don\'t have access to this section' : undefined}
       style={{
+        display: 'flex',
+        alignItems: 'center',
         color: isDisabled ? 'rgba(142,134,120,0.4)' : '#8A8278',
         fontFamily: "'DM Mono', monospace",
         fontSize: '11px',
@@ -84,12 +86,11 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
         marginTop: '8px',
         padding: '10px 24px',
         width: '100%',
+        background: 'none',
+        border: 'none',
+        borderLeft: '2px solid transparent',
+        cursor: isDisabled ? 'default' : 'pointer',
       }}
-```
-
-Save and run:
-```
-git add . && git commit -m "fix nav item styling" && git push
     >
       {label}
     </button>
