@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 
 export async function switchProject(projectId: string) {
@@ -47,7 +48,8 @@ function sanitizeDate(value: string | null): string | null {
 export async function createProject(formData: FormData) {
   const cookieStore = await cookies()
 
-  const supabase = createServerClient(
+  // Anon client — just for getting the current user
+  const anonClient = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -62,15 +64,21 @@ export async function createProject(formData: FormData) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await anonClient.auth.getUser()
   if (!user) redirect('/login')
+
+  // Service role client — bypasses RLS for project + member creation
+  const adminClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
 
   const name = formData.get('name') as string
   const address = formData.get('address') as string
   const startDate = sanitizeDate(formData.get('startDate') as string)
   const targetCompletion = sanitizeDate(formData.get('targetCompletion') as string)
 
-  const { data: project, error } = await supabase
+  const { data: project, error } = await adminClient
     .from('projects')
     .insert({
       user_id: user.id,
@@ -84,7 +92,7 @@ export async function createProject(formData: FormData) {
 
   if (error) throw new Error(error.message)
 
-  await supabase
+  await adminClient
     .from('project_members')
     .insert({
       project_id: project.id,
