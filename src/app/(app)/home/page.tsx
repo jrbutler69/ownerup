@@ -23,18 +23,19 @@ export default function HomePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+   const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
     const { data: memberRows } = await supabase
-  .from('project_members')
-  .select('project_id')
-  .eq('user_id', user.id)
-  .eq('status', 'active')
-  .limit(1)
-
-if (!memberRows?.length) {
-  router.push('/onboarding')
-  return
-}
-const pid = memberRows[0].project_id
+      .from('project_members')
+      .select('project_id')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+    if (!memberRows?.length) {
+      router.push('/onboarding')
+      return
+    }
+    const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid)
+      ? cookiePid
+      : memberRows[0].project_id
 
       const [docsRes, photosRes, renderingsRes, notesRes, timelineRes] = await Promise.all([
         supabase.from('documents').select('*').eq('project_id', pid).eq('is_current', true).order('upload_date', { ascending: false }).limit(4),
