@@ -348,9 +348,10 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
         }
 
         .nav-item.disabled {
-          color: #3D3A35;
+          color: #272420;
           cursor: default;
           pointer-events: none;
+          opacity: 0.4;
         }
 
         .doc-categories {
@@ -383,10 +384,11 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
           border-left-color: #C9B99A;
         }
 
-        .doc-cat-item.cat-disabled {
-          color: #3D3A35;
+      .doc-cat-item.cat-disabled {
+          color: #272420;
           cursor: default;
           pointer-events: none;
+          opacity: 0.4;
         }
 
         .sidebar-bottom {
