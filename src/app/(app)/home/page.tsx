@@ -7,6 +7,10 @@ import { createClient } from '@/lib/supabase-browser'
 export default function HomePage() {
   const [view, setView] = useState<'overview' | 'timeline'>('overview')
   const [loading, setLoading] = useState(true)
+  const [project, setProject] = useState<{ name: string; address: string; start_date: string; target_completion: string } | null>(null)
+  const [members, setMembers] = useState<any[]>([])
+  const [permissions, setPermissions] = useState<Record<string, string>>({})
+  const [isOwnerOrCo, setIsOwnerOrCo] = useState(false)
   const [data, setData] = useState<{
     documents: any[]
     photos: any[]
@@ -23,25 +27,59 @@ export default function HomePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-   const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
-    const { data: memberRows } = await supabase
-      .from('project_members')
-      .select('project_id')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-    if (!memberRows?.length) {
-      router.push('/onboarding')
-      return
-    }
-    const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid)
-      ? cookiePid
-      : memberRows[0].project_id
+      const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
+      const { data: memberRows } = await supabase
+        .from('project_members').select('project_id, role').eq('user_id', user.id).eq('status', 'active')
+      if (!memberRows?.length) { router.push('/onboarding'); return }
+      const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid)
+        ? cookiePid : memberRows[0].project_id
 
+      const memberRow = memberRows.find(r => r.project_id === pid)
+      const role = memberRow?.role ?? 'other'
+      const ownerOrCo = ['owner', 'co-owner'].includes(role)
+      setIsOwnerOrCo(ownerOrCo)
+
+      // Fetch project info and team members
+      const [projectRes, teamRes] = await Promise.all([
+        supabase.from('projects').select('name, address, start_date, target_completion').eq('id', pid).single(),
+        supabase.from('project_members').select('invited_email, role, status').eq('project_id', pid).eq('status', 'active'),
+      ])
+      if (projectRes.data) setProject(projectRes.data)
+      setMembers(teamRes.data ?? [])
+
+      // Determine permissions
+      let permsMap: Record<string, string> = {}
+      if (ownerOrCo) {
+        permsMap = { documents: 'edit', photos: 'edit', renderings: 'edit', notes: 'edit' }
+      } else {
+        const { data: perms } = await supabase.rpc('get_my_permissions', { p_project_id: pid })
+        // Check if any document category has access
+        const docAccess = ['documents_contracts','documents_drawings','documents_budgets','documents_invoices',
+          'documents_permits','documents_insurance','documents_specs','documents_other']
+          .some(k => (perms?.find((p: any) => p.section === k)?.access_level ?? 'none') !== 'none')
+        permsMap = {
+          documents: docAccess ? 'view' : 'none',
+          photos: perms?.find((p: any) => p.section === 'photos')?.access_level ?? 'none',
+          renderings: perms?.find((p: any) => p.section === 'renderings')?.access_level ?? 'none',
+          notes: perms?.find((p: any) => p.section === 'notes')?.access_level ?? 'none',
+        }
+      }
+      setPermissions(permsMap)
+
+      // Only fetch data for accessible sections
       const [docsRes, photosRes, renderingsRes, notesRes, timelineRes] = await Promise.all([
-        supabase.from('documents').select('*').eq('project_id', pid).eq('is_current', true).order('upload_date', { ascending: false }).limit(4),
-        supabase.from('photos').select('*').eq('project_id', pid).order('taken_at', { ascending: false }).limit(6),
-        supabase.from('renderings').select('*').eq('project_id', pid).order('uploaded_at', { ascending: false }).limit(6),
-        supabase.from('notes').select('*').eq('project_id', pid).order('created_at', { ascending: false }).limit(4),
+        permsMap.documents !== 'none'
+          ? supabase.from('documents').select('*').eq('project_id', pid).eq('is_current', true).order('upload_date', { ascending: false }).limit(4)
+          : Promise.resolve({ data: [] }),
+        permsMap.photos !== 'none'
+          ? supabase.from('photos').select('*').eq('project_id', pid).order('taken_at', { ascending: false }).limit(6)
+          : Promise.resolve({ data: [] }),
+        permsMap.renderings !== 'none'
+          ? supabase.from('renderings').select('*').eq('project_id', pid).order('uploaded_at', { ascending: false }).limit(6)
+          : Promise.resolve({ data: [] }),
+        permsMap.notes !== 'none'
+          ? supabase.from('notes').select('*').eq('project_id', pid).order('created_at', { ascending: false }).limit(4)
+          : Promise.resolve({ data: [] }),
         supabase.from('timeline_feed').select('*').eq('project_id', pid).order('event_timestamp', { ascending: false }).limit(20),
       ])
 
@@ -65,27 +103,19 @@ export default function HomePage() {
       </div>
 
       {view === 'overview'
-        ? <OverviewContent data={data} loading={loading} router={router} />
+        ? <OverviewContent data={data} loading={loading} router={router} permissions={permissions} project={project} members={members} />
         : <TimelineContent items={data.timeline} loading={loading} />
       }
 
       <style jsx>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=DM+Mono:wght@300;400&display=swap');
-
         .home { font-family: 'DM Mono', monospace; animation: fadeIn 0.35s ease; }
-
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .view-toggle { display: flex; align-items: center; gap: 24px; margin-bottom: 40px; }
-
         .toggle-btn {
           background: none; border: none; border-bottom: 1px solid transparent;
           font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.18em;
-          text-transform: uppercase; color: #B0A898; cursor: pointer; padding: 0 0 4px;
-          transition: all 0.15s;
+          text-transform: uppercase; color: #B0A898; cursor: pointer; padding: 0 0 4px; transition: all 0.15s;
         }
         .toggle-btn:hover:not(.active) { color: #7A7468; }
         .toggle-btn.active { color: #1A1814; border-bottom-color: #1A1814; }
@@ -94,93 +124,185 @@ export default function HomePage() {
   )
 }
 
-function OverviewContent({ data, loading, router }: { data: any; loading: boolean; router: any }) {
+function OverviewContent({ data, loading, router, permissions, project, members }: {
+  data: any; loading: boolean; router: any
+  permissions: Record<string, string>
+  project: any
+  members: any[]
+}) {
   function formatDate(s: string) {
+    if (!s) return '—'
     return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
-  return (
-    <div className="overview">
-      <div className="sections">
+  function formatFullDate(s: string) {
+    if (!s) return '—'
+    return new Date(s).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  }
 
-        {/* DOCUMENTS */}
-        <div className="section section-left">
+  // Build the 4 tiles in priority order
+  type Tile = { id: string; el: React.ReactNode }
+  const contentTiles: Tile[] = []
+
+  if (permissions.documents !== 'none') {
+    contentTiles.push({
+      id: 'documents',
+      el: (
+        <div className="section">
           <div className="section-header">
             <span className="section-title">Documents</span>
             <button className="view-all" onClick={() => router.push('/documents')}>View all →</button>
           </div>
-          {loading ? (
-            <p className="empty-state">Loading…</p>
-          ) : data.documents.length === 0 ? (
-            <p className="empty-state">No documents yet</p>
-          ) : data.documents.map((doc: any) => (
-            <a key={doc.id} href={doc.file_url} target="_blank" rel="noopener noreferrer" className="row">
-              <span className="row-name">{doc.title}</span>
-              <span className="row-meta">{formatDate(doc.upload_date)}</span>
-            </a>
-          ))}
+          {loading ? <p className="empty-state">Loading…</p>
+            : data.documents.length === 0 ? <p className="empty-state">No documents yet</p>
+            : data.documents.map((doc: any) => (
+              <a key={doc.id} href={doc.file_url} target="_blank" rel="noopener noreferrer" className="row">
+                <span className="row-name">{doc.title}</span>
+                <span className="row-meta">{formatDate(doc.upload_date)}</span>
+              </a>
+            ))}
         </div>
+      )
+    })
+  }
 
-        {/* RECENT PHOTOS */}
-        <div className="section section-right">
+  if (permissions.photos !== 'none') {
+    contentTiles.push({
+      id: 'photos',
+      el: (
+        <div className="section">
           <div className="section-header">
             <span className="section-title">Recent Photos</span>
             <button className="view-all" onClick={() => router.push('/photos')}>View all →</button>
           </div>
-          {loading ? (
-            <p className="empty-state">Loading…</p>
-          ) : data.photos.length === 0 ? (
-            <p className="empty-state">No photos yet</p>
-          ) : (
-            <div className="photo-grid">
-              {data.photos.map((photo: any) => (
-                <div key={photo.id} className="photo-thumb" onClick={() => router.push('/photos')}>
-                  <img src={photo.image_url} alt={photo.caption || 'Site photo'} />
-                </div>
-              ))}
-            </div>
-          )}
+          {loading ? <p className="empty-state">Loading…</p>
+            : data.photos.length === 0 ? <p className="empty-state">No photos yet</p>
+            : (
+              <div className="photo-grid">
+                {data.photos.map((photo: any) => (
+                  <div key={photo.id} className="photo-thumb" onClick={() => router.push('/photos')}>
+                    <img src={photo.image_url} alt={photo.caption || 'Site photo'} />
+                  </div>
+                ))}
+              </div>
+            )}
         </div>
+      )
+    })
+  }
 
-        {/* NOTES */}
-        <div className="section section-left">
+  if (permissions.notes !== 'none') {
+    contentTiles.push({
+      id: 'notes',
+      el: (
+        <div className="section">
           <div className="section-header">
             <span className="section-title">Notes</span>
             <button className="view-all" onClick={() => router.push('/notes')}>View all →</button>
           </div>
-          {loading ? (
-            <p className="empty-state">Loading…</p>
-          ) : data.notes.length === 0 ? (
-            <p className="empty-state">No notes yet</p>
-          ) : data.notes.map((note: any) => (
-            <div key={note.id} className="row">
-              <span className="row-name note-body">{note.body}</span>
-              <span className="row-meta">{formatDate(note.created_at)}</span>
-            </div>
-          ))}
+          {loading ? <p className="empty-state">Loading…</p>
+            : data.notes.length === 0 ? <p className="empty-state">No notes yet</p>
+            : data.notes.map((note: any) => (
+              <div key={note.id} className="row">
+                <span className="row-name note-body">{note.body}</span>
+                <span className="row-meta">{formatDate(note.created_at)}</span>
+              </div>
+            ))}
         </div>
+      )
+    })
+  }
 
-        {/* RECENT RENDERINGS */}
-        <div className="section section-right">
+  if (permissions.renderings !== 'none') {
+    contentTiles.push({
+      id: 'renderings',
+      el: (
+        <div className="section">
           <div className="section-header">
             <span className="section-title">Recent Renderings</span>
             <button className="view-all" onClick={() => router.push('/renderings')}>View all →</button>
           </div>
-          {loading ? (
-            <p className="empty-state">Loading…</p>
-          ) : data.renderings.length === 0 ? (
-            <p className="empty-state">No renderings yet</p>
-          ) : (
-            <div className="photo-grid">
-              {data.renderings.map((r: any) => (
-                <div key={r.id} className="photo-thumb" onClick={() => router.push('/renderings')}>
-                  <img src={r.image_url} alt={r.caption || 'Rendering'} />
-                </div>
-              ))}
+          {loading ? <p className="empty-state">Loading…</p>
+            : data.renderings.length === 0 ? <p className="empty-state">No renderings yet</p>
+            : (
+              <div className="photo-grid">
+                {data.renderings.map((r: any) => (
+                  <div key={r.id} className="photo-thumb" onClick={() => router.push('/renderings')}>
+                    <img src={r.image_url} alt={r.caption || 'Rendering'} />
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
+      )
+    })
+  }
+
+  // Fallback tiles to fill remaining slots
+  const fallbackTiles: Tile[] = [
+    {
+      id: 'project-info',
+      el: (
+        <div className="section">
+          <div className="section-header">
+            <span className="section-title">Project</span>
+          </div>
+          {!project ? <p className="empty-state">Loading…</p> : (
+            <div className="info-rows">
+              <div className="info-row">
+                <span className="info-label">Address</span>
+                <span className="info-value">{project.address || '—'}</span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">Start date</span>
+                <span className="info-value">{formatFullDate(project.start_date)}</span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">Target completion</span>
+                <span className="info-value">{formatFullDate(project.target_completion)}</span>
+              </div>
             </div>
           )}
         </div>
+      )
+    },
+    {
+      id: 'team',
+      el: (
+        <div className="section">
+          <div className="section-header">
+            <span className="section-title">Team</span>
+            <button className="view-all" onClick={() => router.push('/team')}>View all →</button>
+          </div>
+          {members.length === 0 ? <p className="empty-state">No team members yet</p>
+            : members.slice(0, 4).map((m: any, i: number) => (
+              <div key={i} className="row">
+                <span className="row-name">{m.invited_email}</span>
+                <span className="row-meta">{m.role}</span>
+              </div>
+            ))}
+        </div>
+      )
+    }
+  ]
 
+  // Fill to 4 tiles
+  const allTiles = [...contentTiles]
+  for (const fb of fallbackTiles) {
+    if (allTiles.length >= 4) break
+    allTiles.push(fb)
+  }
+
+  // Arrange into 2x2 grid: [0,1] top row, [2,3] bottom row
+  const [tl, tr, bl, br] = allTiles
+
+  return (
+    <div className="overview">
+      <div className="sections">
+        <div className="section-left">{tl?.el}</div>
+        <div className="section-right">{tr?.el}</div>
+        <div className="section-left section-bottom">{bl?.el}</div>
+        <div className="section-right section-bottom">{br?.el}</div>
       </div>
 
       <style jsx>{`
@@ -188,25 +310,21 @@ function OverviewContent({ data, loading, router }: { data: any; loading: boolea
         @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
         .sections { display: grid; grid-template-columns: 1fr 1fr; }
-        .section { padding: 32px 0; border-bottom: 1px solid #E8E3DC; }
-        .section-left { padding-right: 48px; border-right: 1px solid #E8E3DC; }
-        .section-right { padding-left: 48px; }
-        .section:nth-last-child(-n+2) { border-bottom: none; }
+
+        .section-left { padding: 32px 48px 32px 0; border-right: 1px solid #E8E3DC; border-bottom: 1px solid #E8E3DC; }
+        .section-right { padding: 32px 0 32px 48px; border-bottom: 1px solid #E8E3DC; }
+        .section-bottom { border-bottom: none; }
 
         .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
         .section-title { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #7A7468; }
 
         .view-all {
           background: none; border: none; font-family: 'DM Mono', monospace;
-          font-size: 9px; letter-spacing: 0.1em; color: #B0A898; cursor: pointer;
-          padding: 0; transition: color 0.15s;
+          font-size: 9px; letter-spacing: 0.1em; color: #B0A898; cursor: pointer; padding: 0; transition: color 0.15s;
         }
         .view-all:hover { color: #1A1814; }
 
-        .empty-state {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 15px; font-style: italic; font-weight: 300; color: #C0B8AE; margin: 0;
-        }
+        .empty-state { font-family: 'Cormorant Garamond', serif; font-size: 15px; font-style: italic; font-weight: 300; color: #C0B8AE; margin: 0; }
 
         .row {
           display: flex; align-items: baseline; justify-content: space-between;
@@ -214,24 +332,21 @@ function OverviewContent({ data, loading, router }: { data: any; loading: boolea
           text-decoration: none; color: inherit;
         }
         .row:last-child { border-bottom: none; }
-
-        .row-name {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 17px; font-weight: 400; color: #1A1814;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
+        .row-name { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 400; color: #1A1814; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         a.row:hover .row-name { color: #8B6F4E; }
-
-        .note-body {
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-
+        .note-body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .row-meta { font-size: 9px; letter-spacing: 0.08em; color: #B0A898; white-space: nowrap; flex-shrink: 0; }
 
         .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
         .photo-thumb { aspect-ratio: 1; overflow: hidden; background: #E8E3DC; cursor: pointer; }
         .photo-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
         .photo-thumb:hover img { transform: scale(1.04); }
+
+        .info-rows { display: flex; flex-direction: column; gap: 0; }
+        .info-row { display: flex; flex-direction: column; padding: 10px 0; border-bottom: 1px solid #F0EBE4; }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #B0A898; margin-bottom: 4px; }
+        .info-value { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 400; color: #1A1814; }
       `}</style>
     </div>
   )
