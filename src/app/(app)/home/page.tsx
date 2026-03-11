@@ -104,7 +104,7 @@ export default function HomePage() {
 
       {view === 'overview'
         ? <OverviewContent data={data} loading={loading} router={router} permissions={permissions} project={project} members={members} />
-        : <TimelineContent items={data.timeline} loading={loading} />
+        : <TimelineContent items={data.timeline} loading={loading} permissions={permissions} />
       }
 
       <style jsx>{`
@@ -350,7 +350,7 @@ function OverviewContent({ data, loading, router, permissions, project, members 
   )
 }
 
-function TimelineContent({ items, loading }: { items: any[]; loading: boolean }) {
+function TimelineContent({ items, loading, permissions }: { items: any[]; loading: boolean; permissions: Record<string, string> }) {
   function formatDate(s: string) {
     if (!s) return '—'
     return new Date(s).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -359,26 +359,41 @@ function TimelineContent({ items, loading }: { items: any[]; loading: boolean })
   const typeConfig: Record<string, { label: string; color: string }> = {
     document:      { label: 'Document',  color: '#6B8C6B' },
     photo:         { label: 'Photo',     color: '#8B6F47' },
+    rendering:     { label: 'Rendering', color: '#7A6B8C' },
+    note:          { label: 'Note',      color: '#8C7A6B' },
     decision:      { label: 'Decision',  color: '#6B7A8C' },
     budget_update: { label: 'Budget',    color: '#8C6B6B' },
   }
+
+  // Filter timeline items to only show what the user has access to
+  const allowedTypes = new Set<string>()
+  if (permissions.documents !== 'none') allowedTypes.add('document')
+  if (permissions.photos !== 'none') allowedTypes.add('photo')
+  if (permissions.renderings !== 'none') allowedTypes.add('rendering')
+  if (permissions.notes !== 'none') allowedTypes.add('note')
+  // decisions and budget_update only shown if owner/co-owner (they'd have all permissions set)
+  if (permissions.documents === 'edit') { allowedTypes.add('decision'); allowedTypes.add('budget_update') }
+
+  const filtered = Object.keys(permissions).length === 0
+    ? items // still loading permissions, show all temporarily
+    : items.filter(item => allowedTypes.has(item.event_type))
 
   return (
     <div className="timeline">
       {loading ? (
         <p className="empty">Loading…</p>
-      ) : items.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <p className="empty">No activity yet — start by uploading a document or photo.</p>
       ) : (
         <div className="feed">
-          {items.map((item: any, i: number) => {
+          {filtered.map((item: any, i: number) => {
             const cfg = typeConfig[item.event_type] ?? { label: item.event_type, color: '#9a8e7e' }
             const title = item.title || (item.event_type === 'photo' ? 'Photo' : 'Untitled')
             return (
               <div key={item.source_id ?? i} className="feed-item">
                 <div className="feed-line">
                   <div className="feed-dot" style={{ background: cfg.color }} />
-                  {i < items.length - 1 && <div className="feed-connector" />}
+                  {i < filtered.length - 1 && <div className="feed-connector" />}
                 </div>
                 <div className="feed-content">
                   <div className="feed-meta">
