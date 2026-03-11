@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
-export default function SignupPage() {
+function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -269,4 +270,7 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.6,
     marginBottom: '24px',
   },
+}
+export default function SignupPageWrapper() {
+  return <Suspense><SignupPage /></Suspense>
 }
