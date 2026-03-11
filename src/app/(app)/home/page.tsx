@@ -178,10 +178,10 @@ function OverviewContent({ data, loading, router, permissions, project, members 
           {loading ? <p className="empty-state">Loading…</p>
             : data.photos.length === 0 ? <p className="empty-state">No photos yet</p>
             : (
-              <div className="photo-grid">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
                 {data.photos.map((photo: any) => (
-                  <div key={photo.id} className="photo-thumb" onClick={() => router.push('/photos')}>
-                    <img src={photo.image_url} alt={photo.caption || 'Site photo'} />
+                  <div key={photo.id} style={{ aspectRatio: '1', overflow: 'hidden', background: '#E8E3DC', cursor: 'pointer', minWidth: 0 }} onClick={() => router.push('/photos')}>
+                    <img src={photo.image_url} alt={photo.caption || 'Site photo'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                 ))}
               </div>
@@ -225,10 +225,10 @@ function OverviewContent({ data, loading, router, permissions, project, members 
           {loading ? <p className="empty-state">Loading…</p>
             : data.renderings.length === 0 ? <p className="empty-state">No renderings yet</p>
             : (
-              <div className="photo-grid">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
                 {data.renderings.map((r: any) => (
-                  <div key={r.id} className="photo-thumb" onClick={() => router.push('/renderings')}>
-                    <img src={r.image_url} alt={r.caption || 'Rendering'} />
+                  <div key={r.id} style={{ aspectRatio: '1', overflow: 'hidden', background: '#E8E3DC', cursor: 'pointer', minWidth: 0 }} onClick={() => router.push('/renderings')}>
+                    <img src={r.image_url} alt={r.caption || 'Rendering'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                 ))}
               </div>
@@ -248,19 +248,17 @@ function OverviewContent({ data, loading, router, permissions, project, members 
             <span className="section-title">Project</span>
           </div>
           {!project ? <p className="empty-state">Loading…</p> : (
-            <div className="info-rows">
-              <div className="info-row">
-                <span className="info-label">Address</span>
-                <span className="info-value">{project.address || '—'}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Start date</span>
-                <span className="info-value">{formatFullDate(project.start_date)}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Target completion</span>
-                <span className="info-value">{formatFullDate(project.target_completion)}</span>
-              </div>
+            <div>
+              {[
+                { label: 'Address', value: project.address || '—' },
+                { label: 'Start date', value: formatFullDate(project.start_date) },
+                { label: 'Target completion', value: formatFullDate(project.target_completion) },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ padding: '10px 0', borderBottom: '1px solid #F0EBE4' }}>
+                  <span style={{ display: 'block', fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A898', marginBottom: '4px' }}>{label}</span>
+                  <span style={{ display: 'block', fontFamily: "'Cormorant Garamond', serif", fontSize: '17px', fontWeight: 400, color: '#1A1814' }}>{value}</span>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -276,9 +274,9 @@ function OverviewContent({ data, loading, router, permissions, project, members 
           </div>
           {members.length === 0 ? <p className="empty-state">No team members yet</p>
             : members.slice(0, 4).map((m: any, i: number) => (
-              <div key={i} className="row">
-                <span className="row-name">{m.invited_email}</span>
-                <span className="row-meta" style={{ textTransform: 'capitalize' }}>{m.role}</span>
+              <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F0EBE4', gap: '16px' }}>
+                <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '17px', fontWeight: 400, color: '#1A1814', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.invited_email}</span>
+                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.08em', color: '#B0A898', whiteSpace: 'nowrap', flexShrink: 0, textTransform: 'capitalize' }}>{m.role}</span>
               </div>
             ))}
         </div>
@@ -298,11 +296,11 @@ function OverviewContent({ data, loading, router, permissions, project, members 
 
   return (
     <div className="overview">
-      <div className="sections">
-        <div className="section-left">{tl?.el}</div>
-        <div className="section-right">{tr?.el}</div>
-        <div className="section-left section-bottom">{bl?.el}</div>
-        <div className="section-right section-bottom">{br?.el}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+        <div style={{ padding: '32px 48px 32px 0', borderRight: '1px solid #E8E3DC', borderBottom: '1px solid #E8E3DC' }}>{tl?.el}</div>
+        <div style={{ padding: '32px 0 32px 48px', borderBottom: '1px solid #E8E3DC' }}>{tr?.el}</div>
+        <div style={{ padding: '32px 48px 32px 0', borderRight: '1px solid #E8E3DC' }}>{bl?.el}</div>
+        <div style={{ padding: '32px 0 32px 48px' }}>{br?.el}</div>
       </div>
 
       <style jsx>{`
