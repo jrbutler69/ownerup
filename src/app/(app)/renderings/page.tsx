@@ -58,6 +58,7 @@ export default function RenderingsPage() {
   const [caption, setCaption] = useState('')
   const [projectId, setProjectId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [canEdit, setCanEdit] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -65,16 +66,18 @@ export default function RenderingsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-     const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
+      const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
       const { data: memberRows } = await supabase
         .from('project_members')
-        .select('project_id')
+        .select('project_id, role')
         .eq('user_id', user.id)
         .eq('status', 'active')
       if (!memberRows?.length) return
       const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid)
         ? cookiePid
         : memberRows[0].project_id
+
+      setProjectId(pid)
 
       const { data } = await supabase
         .from('renderings')
@@ -87,6 +90,17 @@ export default function RenderingsPage() {
         setGrouped(groupByWeek(data))
       }
       setLoading(false)
+
+      // Determine edit access
+      const memberRow = memberRows.find(r => r.project_id === pid)
+      const role = memberRow?.role ?? 'other'
+      if (['owner', 'co-owner'].includes(role)) {
+        setCanEdit(true)
+      } else {
+        const { data: perms } = await supabase.rpc('get_my_permissions', { p_project_id: pid })
+        const perm = perms?.find((p: any) => p.section === 'renderings')?.access_level ?? 'none'
+        setCanEdit(perm === 'edit')
+      }
     }
     load()
   }, [])
@@ -275,16 +289,18 @@ export default function RenderingsPage() {
         </p>
       </div>
 
-      <div className="upload-zone" onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}>
-        <input ref={fileInputRef} type="file" accept="image/*,.pdf" multiple style={{ display: 'none' }}
-          onChange={e => e.target.files && handleUpload(e.target.files)} />
-        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 6 }}>
-          {uploading ? 'Uploading…' : 'Drop renderings here or click to upload'}
+      {canEdit && (
+        <div className="upload-zone" onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}>
+          <input ref={fileInputRef} type="file" accept="image/*,.pdf" multiple style={{ display: 'none' }}
+            onChange={e => e.target.files && handleUpload(e.target.files)} />
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 6 }}>
+            {uploading ? 'Uploading…' : 'Drop renderings here or click to upload'}
+          </div>
+          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E' }}>
+            JPG, PNG, PDF · multiple files supported
+          </div>
         </div>
-        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E' }}>
-          JPG, PNG, PDF · multiple files supported
-        </div>
-      </div>
+      )}
 
       {error && (
         <div style={{ background: '#FDF0ED', border: '1px solid #E8856A', borderRadius: 4, padding: '10px 16px', fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#C0532A', marginBottom: 24 }}>{error}</div>
@@ -294,7 +310,7 @@ export default function RenderingsPage() {
         <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82' }}>Loading renderings…</div>
       ) : grouped.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 0', fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#B0A89E' }}>
-          No renderings yet. Upload your first rendering above.
+          No renderings yet.
         </div>
       ) : (
         grouped.map(group => (
@@ -315,7 +331,9 @@ export default function RenderingsPage() {
       {lightbox && (
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
-          <button className="lightbox-delete" onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}>Delete</button>
+          {canEdit && (
+            <button className="lightbox-delete" onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}>Delete</button>
+          )}
           <img className="lightbox-img" src={lightbox.image_url} alt={lightbox.caption || 'Rendering'} onClick={e => e.stopPropagation()} />
           {lightbox.caption && <div className="lightbox-caption">{lightbox.caption}</div>}
         </div>

@@ -81,6 +81,7 @@ export default function PhotosPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [openVisit, setOpenVisit] = useState<string | null>(null)
   const [visitDate, setVisitDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [canEdit, setCanEdit] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -88,16 +89,18 @@ export default function PhotosPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-     const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
+      const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
       const { data: memberRows } = await supabase
         .from('project_members')
-        .select('project_id')
+        .select('project_id, role')
         .eq('user_id', user.id)
         .eq('status', 'active')
       if (!memberRows?.length) return
       const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid)
         ? cookiePid
         : memberRows[0].project_id
+
+      setProjectId(pid)
 
       const { data } = await supabase
         .from('photos')
@@ -107,6 +110,17 @@ export default function PhotosPage() {
 
       if (data) setPhotos(data)
       setLoading(false)
+
+      // Determine edit access
+      const memberRow = memberRows.find(r => r.project_id === pid)
+      const role = memberRow?.role ?? 'other'
+      if (['owner', 'co-owner'].includes(role)) {
+        setCanEdit(true)
+      } else {
+        const { data: perms } = await supabase.rpc('get_my_permissions', { p_project_id: pid })
+        const photosPerm = perms?.find((p: any) => p.section === 'photos')?.access_level ?? 'none'
+        setCanEdit(photosPerm === 'edit')
+      }
     }
     load()
   }, [])
@@ -233,7 +247,7 @@ export default function PhotosPage() {
         )}
       </div>
 
-      {!openVisitGroup && (
+      {!openVisitGroup && canEdit && (
         <div className="upload-zone" style={{ marginBottom: 40 }} onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}>
           <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => e.target.files && handleUpload(e.target.files)} />
           <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 16 }}>
@@ -252,7 +266,7 @@ export default function PhotosPage() {
       {loading ? (
         <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82' }}>Loading photos…</div>
       ) : photos.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 0', fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#B0A89E' }}>No photos yet. Upload your first site photo above.</div>
+        <div style={{ textAlign: 'center', padding: '60px 0', fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#B0A89E' }}>No photos yet.</div>
       ) : openVisitGroup ? (
         <div>
           <button className="visit-back" onClick={() => setOpenVisit(null)}>← All visits</button>
@@ -302,7 +316,9 @@ export default function PhotosPage() {
       {lightbox && (
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
-          <button className="lightbox-delete" onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}>Delete</button>
+          {canEdit && (
+            <button className="lightbox-delete" onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}>Delete</button>
+          )}
           {lightboxGroup.findIndex(p => p.id === lightbox.id) > 0 && (
             <button className="lightbox-nav lightbox-nav--prev" onClick={e => { e.stopPropagation(); lightboxNav(-1) }}>‹</button>
           )}

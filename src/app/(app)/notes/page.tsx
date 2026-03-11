@@ -18,6 +18,7 @@ export default function NotesPage() {
   const [saving, setSaving] = useState(false)
   const [projectId, setProjectId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [canEdit, setCanEdit] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export default function NotesPage() {
       const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
       const { data: memberRows } = await supabase
         .from('project_members')
-        .select('project_id')
+        .select('project_id, role')
         .eq('user_id', user.id)
         .eq('status', 'active')
       if (!memberRows?.length) return
@@ -35,11 +36,23 @@ export default function NotesPage() {
         ? cookiePid
         : memberRows[0].project_id
       setProjectId(pid)
+
       const { data } = await supabase
         .from('notes').select('*').eq('project_id', pid)
         .order('created_at', { ascending: false })
       setNotes(data ?? [])
       setLoading(false)
+
+      // Determine edit access
+      const memberRow = memberRows.find(r => r.project_id === pid)
+      const role = memberRow?.role ?? 'other'
+      if (['owner', 'co-owner'].includes(role)) {
+        setCanEdit(true)
+      } else {
+        const { data: perms } = await supabase.rpc('get_my_permissions', { p_project_id: pid })
+        const perm = perms?.find((p: any) => p.section === 'notes')?.access_level ?? 'none'
+        setCanEdit(perm === 'edit')
+      }
     }
     load()
   }, [])
@@ -90,24 +103,26 @@ export default function NotesPage() {
         <h1 className="notes-title">Notes</h1>
       </div>
 
-      {/* Compose */}
-      <div className="compose">
-        <textarea
-          ref={textareaRef}
-          className="compose-input"
-          placeholder="Write a note…"
-          value={body}
-          onChange={autoResize}
-          onKeyDown={handleKeyDown}
-          rows={3}
-        />
-        <div className="compose-footer">
-          <span className="compose-hint">⌘ + Return to save</span>
-          <button className="save-btn" onClick={handleAdd} disabled={saving || !body.trim()}>
-            {saving ? 'Saving…' : 'Add note'}
-          </button>
+      {/* Compose — only shown if user can edit */}
+      {canEdit && (
+        <div className="compose">
+          <textarea
+            ref={textareaRef}
+            className="compose-input"
+            placeholder="Write a note…"
+            value={body}
+            onChange={autoResize}
+            onKeyDown={handleKeyDown}
+            rows={3}
+          />
+          <div className="compose-footer">
+            <span className="compose-hint">⌘ + Return to save</span>
+            <button className="save-btn" onClick={handleAdd} disabled={saving || !body.trim()}>
+              {saving ? 'Saving…' : 'Add note'}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Notes list */}
       {loading ? (
@@ -121,13 +136,15 @@ export default function NotesPage() {
               <div className="note-body">{note.body}</div>
               <div className="note-footer">
                 <span className="note-date">{formatDate(note.created_at)}</span>
-                <button
-                  className="note-delete"
-                  onClick={() => handleDelete(note)}
-                  disabled={deletingId === note.id}
-                >
-                  {deletingId === note.id ? '…' : 'Delete'}
-                </button>
+                {canEdit && (
+                  <button
+                    className="note-delete"
+                    onClick={() => handleDelete(note)}
+                    disabled={deletingId === note.id}
+                  >
+                    {deletingId === note.id ? '…' : 'Delete'}
+                  </button>
+                )}
               </div>
             </div>
           ))}
