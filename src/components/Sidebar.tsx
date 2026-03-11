@@ -26,6 +26,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
   const searchParams = useSearchParams()
   const supabase = createClient()
   const [showSwitcher, setShowSwitcher] = useState(false)
+  console.log('SIDEBAR received:', { permissions, userRole })
 
   const isDocuments = pathname.startsWith('/documents')
   const activeCategory = searchParams.get('category')

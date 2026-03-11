@@ -55,14 +55,6 @@ export default async function AppLayout({
     }
   }
 
-console.log('DEBUG layout:', {
-    userId: user.id,
-    userRole,
-    projectId: project?.id,
-    permissionsKeys: Object.keys(permissions),
-    permissions,
-  })
-
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar
