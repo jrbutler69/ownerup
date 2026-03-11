@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!invite) return NextResponse.json({ error: 'Invite not found' }, { status: 404 })
-    if (invite.status !== 'pending') return NextResponse.json({ error: 'Invite already used' }, { status: 400 })
+    if (invite.status !== 'pending' && invite.status !== 'invited') return NextResponse.json({ error: 'Invite already used' }, { status: 400 })
     if (new Date(invite.expires_at) < new Date()) return NextResponse.json({ error: 'Invite expired' }, { status: 400 })
 
     // Update project_members — set user_id and status to active
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       .update({ user_id: user.id, status: 'active' })
       .eq('project_id', invite.project_id)
       .eq('invited_email', invite.invited_email)
-      .eq('status', 'pending')
+      .eq('status', 'invited')
 
     if (memberError) return NextResponse.json({ error: memberError.message }, { status: 500 })
 
