@@ -368,7 +368,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
           border-left: 2px solid transparent;
           cursor: pointer;
           text-align: left;
-          color: #4A4540;
+          color: #8A8278;
           font-family: 'DM Mono', monospace;
           font-size: 10px;
           letter-spacing: 0.12em;
