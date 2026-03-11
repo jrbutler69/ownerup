@@ -278,7 +278,7 @@ function OverviewContent({ data, loading, router, permissions, project, members 
             : members.slice(0, 4).map((m: any, i: number) => (
               <div key={i} className="row">
                 <span className="row-name">{m.invited_email}</span>
-                <span className="row-meta">{m.role}</span>
+                <span className="row-meta" style={{ textTransform: 'capitalize' }}>{m.role}</span>
               </div>
             ))}
         </div>
@@ -337,16 +337,16 @@ function OverviewContent({ data, loading, router, permissions, project, members 
         .note-body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .row-meta { font-size: 9px; letter-spacing: 0.08em; color: #B0A898; white-space: nowrap; flex-shrink: 0; }
 
-        .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-        .photo-thumb { aspect-ratio: 1; overflow: hidden; background: #E8E3DC; cursor: pointer; }
+        .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; }
+        .photo-thumb { aspect-ratio: 1; overflow: hidden; background: #E8E3DC; cursor: pointer; min-width: 0; }
         .photo-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
         .photo-thumb:hover img { transform: scale(1.04); }
 
         .info-rows { display: flex; flex-direction: column; gap: 0; }
         .info-row { display: flex; flex-direction: column; padding: 10px 0; border-bottom: 1px solid #F0EBE4; }
         .info-row:last-child { border-bottom: none; }
-        .info-label { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #B0A898; margin-bottom: 4px; }
-        .info-value { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 400; color: #1A1814; }
+        .info-label { display: block; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #B0A898; margin-bottom: 4px; }
+        .info-value { display: block; font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 400; color: #1A1814; }
       `}</style>
     </div>
   )
