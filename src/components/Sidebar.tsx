@@ -32,7 +32,6 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
   const currentProject = allProjects.find(p => p.id === selectedProjectId) ?? allProjects[0]
 
   const isOwnerOrCoOwner = ['owner', 'co-owner'].includes(userRole)
-  console.log('SIDEBAR role:', userRole, 'permissions:', JSON.stringify(permissions))
 
   function getAccess(section: string): string {
     if (isOwnerOrCoOwner) return 'edit'

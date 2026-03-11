@@ -43,7 +43,6 @@ export default async function AppLayout({
 
   // Get user's role for the selected project
   const memberRow = memberRows?.find(r => r.project_id === project?.id)
-  console.log('DEBUG role:', userRole, 'permissions:', JSON.stringify(permissions))
   const userRole = memberRow?.role ?? 'other'
 
   // Owners and co-owners get full access — skip permissions fetch
