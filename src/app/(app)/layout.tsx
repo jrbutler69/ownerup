@@ -49,10 +49,7 @@ export default async function AppLayout({
   let permissions: Record<string, string> = {}
   if (!['owner', 'co-owner'].includes(userRole)) {
     const { data: permRows } = await supabase
-      .from('project_permissions')
-      .select('section, access_level')
-      .eq('project_id', project?.id)
-      .eq('user_id', user.id)
+      .rpc('get_my_permissions', { p_project_id: project?.id })
     for (const row of permRows ?? []) {
       permissions[row.section] = row.access_level
     }
