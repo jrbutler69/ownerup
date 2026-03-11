@@ -62,7 +62,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
     router.refresh()
   }
 
-  function NavButton({ label, path, section }: { label: string, path: string, section: string }) {
+ function NavButton({ label, path, section }: { label: string, path: string, section: string }) {
   const access = getAccess(section)
   const isActive = pathname === path
   const isDisabled = access === 'none'
@@ -72,9 +72,17 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
       className={`nav-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
       onClick={() => !isDisabled && router.push(path)}
       title={isDisabled ? 'You don\'t have access to this section' : undefined}
-      style={{ color: isDisabled ? 'rgba(142,134,120,0.4)' : '#8A8278' }}
+      style={{
+        color: isDisabled ? 'rgba(142,134,120,0.4)' : '#8A8278',
+        fontFamily: "'DM Mono', monospace",
+        fontSize: '11px',
+        letterSpacing: '0.18em',
+        textTransform: 'uppercase' as const,
+        fontWeight: 400,
+        opacity: isDisabled ? 0.4 : 1,
+      }}
     >
-      <span className="nav-label">{label}</span>
+      {label}
     </button>
   )
 }
