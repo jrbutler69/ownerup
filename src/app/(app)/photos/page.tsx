@@ -40,12 +40,7 @@ function groupByWeek(photos: Photo[]): GroupedPhotos[] {
       const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
       const start = monday.toLocaleDateString('en-US', opts)
       const end = sunday.toLocaleDateString('en-US', { ...opts, year: 'numeric' })
-      return {
-        key,
-        label: `Week of ${start} – ${end}`,
-        sublabel: `${photos.length} photo${photos.length !== 1 ? 's' : ''}`,
-        photos,
-      }
+      return { key, label: `Week of ${start} – ${end}`, sublabel: `${photos.length} photo${photos.length !== 1 ? 's' : ''}`, photos }
     })
 }
 
@@ -82,44 +77,32 @@ export default function PhotosPage() {
   const [openVisit, setOpenVisit] = useState<string | null>(null)
   const [visitDate, setVisitDate] = useState(() => new Date().toISOString().split('T')[0])
   const [canEdit, setCanEdit] = useState(false)
+  const [hasAnyAccess, setHasAnyAccess] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
       const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
       const { data: memberRows } = await supabase
-        .from('project_members')
-        .select('project_id, role')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
+        .from('project_members').select('project_id, role').eq('user_id', user.id).eq('status', 'active')
       if (!memberRows?.length) return
-      const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid)
-        ? cookiePid
-        : memberRows[0].project_id
-
+      const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid) ? cookiePid : memberRows[0].project_id
       setProjectId(pid)
-
-      const { data } = await supabase
-        .from('photos')
-        .select('*')
-        .eq('project_id', pid)
-        .order('taken_at', { ascending: false })
-
+      const { data } = await supabase.from('photos').select('*').eq('project_id', pid).order('taken_at', { ascending: false })
       if (data) setPhotos(data)
       setLoading(false)
-
-      // Determine edit access
       const memberRow = memberRows.find(r => r.project_id === pid)
       const role = memberRow?.role ?? 'other'
       if (['owner', 'co-owner'].includes(role)) {
+        setHasAnyAccess(true)
         setCanEdit(true)
       } else {
         const { data: perms } = await supabase.rpc('get_my_permissions', { p_project_id: pid })
-        const photosPerm = perms?.find((p: any) => p.section === 'photos')?.access_level ?? 'none'
-        setCanEdit(photosPerm === 'edit')
+        const level = perms?.find((p: any) => p.section === 'photos')?.access_level ?? 'none'
+        setHasAnyAccess(level !== 'none')
+        setCanEdit(level === 'edit')
       }
     }
     load()
@@ -130,31 +113,20 @@ export default function PhotosPage() {
     setUploading(true)
     setError(null)
     const newPhotos: Photo[] = []
-
     for (const file of Array.from(files)) {
       const ext = file.name.split('.').pop()
       const filename = `${projectId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-
       const { error: uploadError } = await supabase.storage.from('photos').upload(filename, file)
       if (uploadError) { setError(`Upload failed: ${uploadError.message}`); continue }
-
       const { data: { publicUrl } } = supabase.storage.from('photos').getPublicUrl(filename)
-
-      const { data: newPhoto, error: dbError } = await supabase
-        .from('photos')
-        .insert({
-          project_id: projectId,
-          image_url: publicUrl,
-          taken_at: new Date(visitDate + 'T12:00:00').toISOString(),
-          uploaded_at: new Date().toISOString(),
-          caption: null,
-        })
-        .select().single()
-
+      const { data: newPhoto, error: dbError } = await supabase.from('photos').insert({
+        project_id: projectId, image_url: publicUrl,
+        taken_at: new Date(visitDate + 'T12:00:00').toISOString(),
+        uploaded_at: new Date().toISOString(), caption: null,
+      }).select().single()
       if (dbError) { setError(`DB error: ${dbError.message}`) }
       else if (newPhoto) newPhotos.push(newPhoto)
     }
-
     if (newPhotos.length) setPhotos(prev => [...newPhotos, ...prev])
     setUploading(false)
   }
@@ -173,10 +145,7 @@ export default function PhotosPage() {
     setLightbox(null)
   }
 
-  function openLightbox(photo: Photo, group: Photo[]) {
-    setLightbox(photo)
-    setLightboxGroup(group)
-  }
+  function openLightbox(photo: Photo, group: Photo[]) { setLightbox(photo); setLightboxGroup(group) }
 
   function lightboxNav(dir: 1 | -1) {
     if (!lightbox) return
@@ -188,6 +157,17 @@ export default function PhotosPage() {
   const weekGroups = groupByWeek(photos)
   const dayGroups = groupByDay(photos)
   const openVisitGroup = dayGroups.find(g => g.key === openVisit)
+
+  if (!loading && !hasAnyAccess) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
+        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 300, color: '#1C1A17', margin: '0 0 12px' }}>No access</h1>
+        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', letterSpacing: '0.08em', margin: 0 }}>
+          You don't have access to this section. Contact the project owner if you need access.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -316,9 +296,7 @@ export default function PhotosPage() {
       {lightbox && (
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
-          {canEdit && (
-            <button className="lightbox-delete" onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}>Delete</button>
-          )}
+          {canEdit && <button className="lightbox-delete" onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}>Delete</button>}
           {lightboxGroup.findIndex(p => p.id === lightbox.id) > 0 && (
             <button className="lightbox-nav lightbox-nav--prev" onClick={e => { e.stopPropagation(); lightboxNav(-1) }}>‹</button>
           )}
