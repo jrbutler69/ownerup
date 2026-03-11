@@ -149,9 +149,9 @@ function OverviewContent({ data, loading, router, permissions, project, members 
       id: 'documents',
       el: (
         <div className="section">
-          <div className="section-header">
-            <span className="section-title">Documents</span>
-            <button className="view-all" onClick={() => router.push('/documents')}>View all →</button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Documents</span>
+            <button style={{ background: "none", border: "none", fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#B0A898", cursor: "pointer", padding: "0", flexShrink: 0, whiteSpace: "nowrap" as const }} onClick={() => router.push('/documents')}>View all →</button>
           </div>
           {loading ? <p className="empty-state">Loading…</p>
             : data.documents.length === 0 ? <p className="empty-state">No documents yet</p>
@@ -171,9 +171,9 @@ function OverviewContent({ data, loading, router, permissions, project, members 
       id: 'photos',
       el: (
         <div className="section">
-          <div className="section-header">
-            <span className="section-title">Recent Photos</span>
-            <button className="view-all" onClick={() => router.push('/photos')}>View all →</button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Recent Photos</span>
+            <button style={{ background: "none", border: "none", fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#B0A898", cursor: "pointer", padding: "0", flexShrink: 0, whiteSpace: "nowrap" as const }} onClick={() => router.push('/photos')}>View all →</button>
           </div>
           {loading ? <p className="empty-state">Loading…</p>
             : data.photos.length === 0 ? <p className="empty-state">No photos yet</p>
@@ -196,9 +196,9 @@ function OverviewContent({ data, loading, router, permissions, project, members 
       id: 'notes',
       el: (
         <div className="section">
-          <div className="section-header">
-            <span className="section-title">Notes</span>
-            <button className="view-all" onClick={() => router.push('/notes')}>View all →</button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Notes</span>
+            <button style={{ background: "none", border: "none", fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#B0A898", cursor: "pointer", padding: "0", flexShrink: 0, whiteSpace: "nowrap" as const }} onClick={() => router.push('/notes')}>View all →</button>
           </div>
           {loading ? <p className="empty-state">Loading…</p>
             : data.notes.length === 0 ? <p className="empty-state">No notes yet</p>
@@ -218,9 +218,9 @@ function OverviewContent({ data, loading, router, permissions, project, members 
       id: 'renderings',
       el: (
         <div className="section">
-          <div className="section-header">
-            <span className="section-title">Recent Renderings</span>
-            <button className="view-all" onClick={() => router.push('/renderings')}>View all →</button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Recent Renderings</span>
+            <button style={{ background: "none", border: "none", fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#B0A898", cursor: "pointer", padding: "0", flexShrink: 0, whiteSpace: "nowrap" as const }} onClick={() => router.push('/renderings')}>View all →</button>
           </div>
           {loading ? <p className="empty-state">Loading…</p>
             : data.renderings.length === 0 ? <p className="empty-state">No renderings yet</p>
@@ -244,8 +244,8 @@ function OverviewContent({ data, loading, router, permissions, project, members 
       id: 'project-info',
       el: (
         <div className="section">
-          <div className="section-header">
-            <span className="section-title">Project</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Project</span>
           </div>
           {!project ? <p className="empty-state">Loading…</p> : (
             <div>
@@ -268,9 +268,9 @@ function OverviewContent({ data, loading, router, permissions, project, members 
       id: 'team',
       el: (
         <div className="section">
-          <div className="section-header">
-            <span className="section-title">Team</span>
-            <button className="view-all" onClick={() => router.push('/team')}>View all →</button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Team</span>
+            <button style={{ background: "none", border: "none", fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#B0A898", cursor: "pointer", padding: "0", flexShrink: 0, whiteSpace: "nowrap" as const }} onClick={() => router.push('/team')}>View all →</button>
           </div>
           {members.length === 0 ? <p className="empty-state">No team members yet</p>
             : members.slice(0, 4).map((m: any, i: number) => (
@@ -313,8 +313,8 @@ function OverviewContent({ data, loading, router, permissions, project, members 
         .section-right { padding: 32px 0 32px 48px; border-bottom: 1px solid #E8E3DC; }
         .section-bottom { border-bottom: none; }
 
-        .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .section-title { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #7A7468; }
+        .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 16px; }
+        .section-title { font-family: 'DM Mono', monospace !important; font-size: 11px !important; letter-spacing: 0.2em !important; text-transform: uppercase !important; color: #7A7468 !important; font-weight: 400 !important; }
 
         .view-all {
           background: none; border: none; font-family: 'DM Mono', monospace;
