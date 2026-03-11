@@ -77,9 +77,8 @@ export default function TeamPage() {
         setHasAnyAccess(level !== 'none')
       }
 
-      const { data: allMembers, error: membersError } = await supabase
+      const { data: allMembers } = await supabase
         .from('project_members').select('*').eq('project_id', memberRow.project_id).order('created_at')
-      console.log('DEBUG team:', { projectId: memberRow.project_id, allMembers, membersError })
       setMembers(allMembers ?? [])
       setLoading(false)
     }
