@@ -54,10 +54,10 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
     router.push('/login')
   }
 
-  async function handleSwitchProject(projectId: string) {
+ async function handleSwitchProject(projectId: string) {
   await switchProject(projectId)
   setShowSwitcher(false)
-  router.push(`/switching?pid=${projectId}`)
+  window.location.assign('/home')
 }
 
  function NavButton({ label, path, section }: { label: string, path: string, section: string }) {
