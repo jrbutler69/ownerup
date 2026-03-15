@@ -25,12 +25,10 @@ export default function HomePage() {
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-console.log('user:', user?.id, user?.email)
-if (!user) return
+      if (!user) return
 
-      const urlParams = new URLSearchParams(window.location.search)
-      const urlPid = urlParams.get('switched')
-      const cookiePid = urlPid ?? document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
+      const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
+      console.log('cookiePid:', cookiePid)
       const { data: memberRows } = await supabase
         .from('project_members').select('project_id, role').eq('user_id', user.id).eq('status', 'active')
       if (!memberRows?.length) { router.push('/onboarding'); return }
@@ -94,7 +92,7 @@ if (!user) return
     load()
   }, [])
 
-const allEmpty = !loading &&
+  const allEmpty = !loading &&
     data.documents.length === 0 &&
     data.photos.length === 0 &&
     data.renderings.length === 0 &&
@@ -158,7 +156,6 @@ function OverviewContent({ data, loading, router, permissions, project, members,
     )
   }
 
-  // Build the 4 tiles in priority order
   type Tile = { id: string; el: React.ReactNode }
   const contentTiles: Tile[] = []
 
@@ -256,7 +253,6 @@ function OverviewContent({ data, loading, router, permissions, project, members,
     })
   }
 
-  // Fallback tiles to fill remaining slots
   const fallbackTiles: Tile[] = [
     {
       id: 'project-info',
@@ -302,7 +298,6 @@ function OverviewContent({ data, loading, router, permissions, project, members,
     }
   ]
 
-  // Fill to 4 tiles
   const allTiles = [...contentTiles]
   for (const fb of fallbackTiles) {
     if (allTiles.length >= 4) break
@@ -333,7 +328,7 @@ function OverviewContent({ data, loading, router, permissions, project, members,
         .row-name { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 400; color: #1A1814; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         a.row:hover .row-name { color: #8B6F4E; }
         .row-meta { font-size: 9px; letter-spacing: 0.08em; color: #B0A898; white-space: nowrap; flex-shrink: 0; }
-        .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: '100%'; }
+        .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; }
         .photo-thumb { aspect-ratio: 1; overflow: hidden; background: #E8E3DC; cursor: pointer; min-width: 0; }
         .photo-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
         .photo-thumb:hover img { transform: scale(1.04); }
