@@ -57,7 +57,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
   async function handleSwitchProject(projectId: string) {
   await switchProject(projectId)
   setShowSwitcher(false)
-  window.location.reload()
+  setTimeout(() => window.location.reload(), 300)
 }
 
  function NavButton({ label, path, section }: { label: string, path: string, section: string }) {
