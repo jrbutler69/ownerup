@@ -54,8 +54,9 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
     router.push('/login')
   }
 
-  async function handleSwitchProject(projectId: string) {
-  console.log('switching to:', projectId)
+  function handleSwitchProject(projectId: string) {
+  switchProject(projectId)
+  setShowSwitcher(false)
   window.location.href = `/switching?pid=${projectId}`
 }
 
