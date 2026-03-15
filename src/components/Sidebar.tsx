@@ -56,9 +56,11 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
 
  async function handleSwitchProject(projectId: string) {
   await switchProject(projectId)
-  const a = document.createElement('a')
-  a.href = '/home'
-  a.click()
+  const form = document.createElement('form')
+  form.method = 'GET'
+  form.action = '/home'
+  document.body.appendChild(form)
+  form.submit()
 }
 
  function NavButton({ label, path, section }: { label: string, path: string, section: string }) {
