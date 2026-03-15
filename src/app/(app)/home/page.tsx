@@ -25,7 +25,8 @@ export default function HomePage() {
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+console.log('user:', user?.id, user?.email)
+if (!user) return
 
       const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
       const { data: memberRows } = await supabase
