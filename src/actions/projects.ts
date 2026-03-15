@@ -13,7 +13,6 @@ export async function switchProject(projectId: string) {
     maxAge: 60 * 60 * 24 * 365,
     sameSite: 'lax',
   })
-  revalidatePath('/', 'layout')
 }
 
 // Accepts YYYY-MM-DD (from date input) or DD/MM/YYYY or MM/DD/YYYY
