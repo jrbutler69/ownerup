@@ -1,5 +1,7 @@
 'use client'
 
+export const fetchCache = 'force-no-store'
+
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
