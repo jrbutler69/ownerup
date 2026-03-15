@@ -13,11 +13,20 @@ interface Photo {
   uploaded_by: string | null
 }
 
+interface Episode {
+  id: string
+  project_id: string
+  episode_date: string
+  type: string
+  title: string | null
+}
+
 interface GroupedPhotos {
   key: string
   label: string
   sublabel: string
   photos: Photo[]
+  episode?: Episode
 }
 
 function groupByWeek(photos: Photo[]): GroupedPhotos[] {
@@ -45,7 +54,7 @@ function groupByWeek(photos: Photo[]): GroupedPhotos[] {
     })
 }
 
-function groupByDay(photos: Photo[]): GroupedPhotos[] {
+function groupByDay(photos: Photo[], episodes: Episode[]): GroupedPhotos[] {
   const groups: Record<string, Photo[]> = {}
   for (const photo of photos) {
     const date = new Date(photo.taken_at || photo.uploaded_at)
@@ -58,16 +67,18 @@ function groupByDay(photos: Photo[]): GroupedPhotos[] {
     .map(([key, photos]) => {
       const [year, month, day] = key.split('-').map(Number)
       const date = new Date(year, month - 1, day)
-      const label = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-      return { key, label, sublabel: `${photos.length} photo${photos.length !== 1 ? 's' : ''}`, photos }
+      const dateLabel = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      const episode = episodes.find(e => e.episode_date === key)
+      return { key, label: dateLabel, sublabel: `${photos.length} photo${photos.length !== 1 ? 's' : ''}`, photos, episode }
     })
 }
 
-type ViewMode = 'grid' | 'visits'
+type ViewMode = 'grid' | 'episodes'
 
 export default function PhotosPage() {
   const supabase = createClient()
   const [photos, setPhotos] = useState<Photo[]>([])
+  const [episodes, setEpisodes] = useState<Episode[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState<Photo | null>(null)
@@ -77,11 +88,15 @@ export default function PhotosPage() {
   const [memberEmails, setMemberEmails] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
-  const [openVisit, setOpenVisit] = useState<string | null>(null)
-  const [visitDate, setVisitDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [openEpisode, setOpenEpisode] = useState<string | null>(null)
+  const [episodeDate, setEpisodeDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [episodeTitleInput, setEpisodeTitleInput] = useState('')
   const [canEdit, setCanEdit] = useState(false)
   const [hasAnyAccess, setHasAnyAccess] = useState(true)
+  const [editingEpisodeKey, setEditingEpisodeKey] = useState<string | null>(null)
+  const [editingEpisodeTitle, setEditingEpisodeTitle] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const editInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function load() {
@@ -99,21 +114,23 @@ export default function PhotosPage() {
       const pid = cookiePid && myRows.some((r: any) => r.project_id === cookiePid) ? cookiePid : myRows[0].project_id
       setProjectId(pid)
 
-      // Build user_id -> email map from project_members
       const projectMembers = memberRows.filter((r: any) => r.project_id === pid)
       const emailMap: Record<string, string> = {}
       for (const m of projectMembers) {
         if (m.user_id && m.invited_email) emailMap[m.user_id] = m.invited_email
       }
-      // Owner row may have null invited_email — use auth email if it's the current user
       const ownerRow = projectMembers.find((r: any) => r.role === 'owner')
       if (ownerRow?.user_id && !emailMap[ownerRow.user_id] && ownerRow.user_id === user.id) {
         emailMap[ownerRow.user_id] = user.email ?? ''
       }
       setMemberEmails(emailMap)
 
-      const { data } = await supabase.from('photos').select('*').eq('project_id', pid).order('taken_at', { ascending: false })
-      if (data) setPhotos(data)
+      const { data: photoData } = await supabase.from('photos').select('*').eq('project_id', pid).order('taken_at', { ascending: false })
+      if (photoData) setPhotos(photoData)
+
+      const { data: episodeData } = await supabase.from('episodes').select('*').eq('project_id', pid).eq('type', 'photos')
+      if (episodeData) setEpisodes(episodeData)
+
       setLoading(false)
 
       const memberRow = myRows.find((r: any) => r.project_id === pid)
@@ -131,10 +148,42 @@ export default function PhotosPage() {
     load()
   }, [])
 
+  async function getOrCreateEpisode(pid: string, date: string, title: string): Promise<Episode | null> {
+    // Check if episode already exists for this date
+    const existing = episodes.find(e => e.episode_date === date && e.type === 'photos')
+    if (existing) {
+      // If a title was provided and episode has no title yet, update it
+      if (title && !existing.title) {
+        const { data: updated } = await supabase.from('episodes').update({ title }).eq('id', existing.id).select().single()
+        if (updated) {
+          setEpisodes(prev => prev.map(e => e.id === updated.id ? updated : e))
+          return updated
+        }
+      }
+      return existing
+    }
+    // Create new episode
+    const { data: newEpisode } = await supabase.from('episodes').insert({
+      project_id: pid,
+      episode_date: date,
+      type: 'photos',
+      title: title || null,
+    }).select().single()
+    if (newEpisode) {
+      setEpisodes(prev => [...prev, newEpisode])
+      return newEpisode
+    }
+    return null
+  }
+
   async function handleUpload(files: FileList) {
     if (!projectId || !currentUserId || files.length === 0) return
     setUploading(true)
     setError(null)
+
+    // Ensure episode record exists for this date
+    await getOrCreateEpisode(projectId, episodeDate, episodeTitleInput.trim())
+
     const newPhotos: Photo[] = []
     for (const file of Array.from(files)) {
       const ext = file.name.split('.').pop()
@@ -145,7 +194,7 @@ export default function PhotosPage() {
       const { data: newPhoto, error: dbError } = await supabase.from('photos').insert({
         project_id: projectId,
         image_url: publicUrl,
-        taken_at: new Date(visitDate + 'T12:00:00').toISOString(),
+        taken_at: new Date(episodeDate + 'T12:00:00').toISOString(),
         uploaded_at: new Date().toISOString(),
         caption: null,
         uploaded_by: currentUserId,
@@ -155,6 +204,7 @@ export default function PhotosPage() {
     }
     if (newPhotos.length) setPhotos(prev => [...newPhotos, ...prev])
     setUploading(false)
+    setEpisodeTitleInput('')
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -169,6 +219,27 @@ export default function PhotosPage() {
     await supabase.from('photos').delete().eq('id', photo.id)
     setPhotos(prev => prev.filter(p => p.id !== photo.id))
     setLightbox(null)
+  }
+
+  async function saveEpisodeTitle(key: string, title: string) {
+    if (!projectId) return
+    const existing = episodes.find(e => e.episode_date === key && e.type === 'photos')
+    if (existing) {
+      const { data: updated } = await supabase.from('episodes').update({ title: title || null }).eq('id', existing.id).select().single()
+      if (updated) setEpisodes(prev => prev.map(e => e.id === updated.id ? updated : e))
+    } else {
+      const { data: newEpisode } = await supabase.from('episodes').insert({
+        project_id: projectId, episode_date: key, type: 'photos', title: title || null,
+      }).select().single()
+      if (newEpisode) setEpisodes(prev => [...prev, newEpisode])
+    }
+    setEditingEpisodeKey(null)
+  }
+
+  function startEditingEpisode(key: string, currentTitle: string | null) {
+    setEditingEpisodeKey(key)
+    setEditingEpisodeTitle(currentTitle ?? '')
+    setTimeout(() => editInputRef.current?.focus(), 50)
   }
 
   function openLightbox(photo: Photo, group: Photo[]) { setLightbox(photo); setLightboxGroup(group) }
@@ -189,9 +260,13 @@ export default function PhotosPage() {
     return `${emails[0]} +${emails.length - 1} others`
   }
 
+  function episodeDisplayTitle(group: GroupedPhotos): string {
+    return group.episode?.title || group.label
+  }
+
   const weekGroups = groupByWeek(photos)
-  const dayGroups = groupByDay(photos)
-  const openVisitGroup = dayGroups.find(g => g.key === openVisit)
+  const dayGroups = groupByDay(photos, episodes)
+  const openEpisodeGroup = dayGroups.find(g => g.key === openEpisode)
 
   if (!loading && !hasAnyAccess) {
     return (
@@ -218,20 +293,25 @@ export default function PhotosPage() {
         .upload-zone:hover { background: #F0EBE3; }
         .group-label { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #9A8F82; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #E8E0D5; }
         .group-label:first-child { margin-top: 0; }
-        .visits-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
-        .visit-folder { background: #fff; border: 1px solid #E8E0D5; border-radius: 4px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; overflow: hidden; }
-        .visit-folder:hover { border-color: #C9B99A; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
-        .visit-thumb-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; height: 120px; background: #EDE9E3; overflow: hidden; }
-        .visit-thumb-strip > div { position: relative; overflow: hidden; height: 120px; }
-        .visit-thumb-strip img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-        .visit-thumb-blank { background: #EDE9E3; }
-        .visit-info { padding: 14px 16px; }
-        .visit-info-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: 4px; }
-        .visit-date { font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 400; color: #1C1A17; margin: 0; }
-        .visit-count { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #9A8F82; margin: 0; white-space: nowrap; }
-        .visit-uploader { font-family: 'DM Mono', monospace; font-size: 9px; color: #B0A89E; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
-        .visit-back { display: flex; align-items: center; gap: 8px; background: none; border: none; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #9A8F82; cursor: pointer; padding: 0; margin-bottom: 24px; transition: color 0.15s; }
-        .visit-back:hover { color: #1C1A17; }
+        .episodes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+        .episode-folder { background: #fff; border: 1px solid #E8E0D5; border-radius: 4px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; overflow: hidden; }
+        .episode-folder:hover { border-color: #C9B99A; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+        .episode-thumb-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; height: 120px; background: #EDE9E3; overflow: hidden; }
+        .episode-thumb-strip > div { position: relative; overflow: hidden; height: 120px; }
+        .episode-thumb-strip img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+        .episode-thumb-blank { background: #EDE9E3; }
+        .episode-info { padding: 14px 16px; }
+        .episode-title { font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 400; color: #1C1A17; margin: 0 0 4px; }
+        .episode-date-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: #B0A89E; margin: 0 0 4px; }
+        .episode-info-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: 4px; }
+        .episode-count { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #9A8F82; margin: 0; white-space: nowrap; }
+        .episode-uploader { font-family: 'DM Mono', monospace; font-size: 9px; color: #B0A89E; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+        .episode-back { display: flex; align-items: center; gap: 8px; background: none; border: none; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #9A8F82; cursor: pointer; padding: 0; margin-bottom: 24px; transition: color 0.15s; }
+        .episode-back:hover { color: #1C1A17; }
+        .episode-title-edit { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .episode-title-input { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 400; color: #1C1A17; background: transparent; border: none; border-bottom: 1px solid #C9B99A; outline: none; width: 100%; padding: 0 0 2px; }
+        .episode-edit-btn { background: none; border: none; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #C9B99A; cursor: pointer; padding: 0; white-space: nowrap; transition: color 0.15s; }
+        .episode-edit-btn:hover { color: #8b6f47; }
         .lightbox-overlay { position: fixed; inset: 0; background: rgba(28,26,23,0.94); z-index: 1000; display: flex; align-items: center; justify-content: center; }
         .lightbox-img { max-width: 86vw; max-height: 85vh; border-radius: 4px; object-fit: contain; }
         .lightbox-close { position: absolute; top: 24px; right: 32px; color: #F5F2EE; font-size: 28px; cursor: pointer; font-family: 'DM Mono', monospace; background: none; border: none; line-height: 1; }
@@ -247,35 +327,88 @@ export default function PhotosPage() {
         .toggle-btn:first-child { border-right: 1px solid #E8E0D5; }
         .toggle-btn.active { background: #1C1A17; color: #F0E8D8; }
         .toggle-btn:hover:not(.active) { background: #F5F2EE; color: #3A3530; }
+        .episode-title-field { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+        .episode-title-field input { padding: '6px 10px'; background: #fff; border: 1px solid #ddd5c8; border-radius: 2px; font-family: 'DM Mono', monospace; font-size: 12px; color: #1c1a17; outline: none; width: 220px; padding: 6px 10px; }
+        .episode-title-field input:focus { border-color: #8b6f47; }
       `}</style>
 
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
         <div>
           <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 400, color: '#1C1A17', margin: '0 0 6px' }}>
-            {openVisitGroup ? openVisitGroup.label : 'Photos'}
+            {openEpisodeGroup
+              ? (openEpisodeGroup.episode?.title || openEpisodeGroup.label)
+              : 'Photos'}
           </h1>
+          {openEpisodeGroup && openEpisodeGroup.episode?.title && (
+            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              {openEpisodeGroup.label}
+            </p>
+          )}
           <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82', margin: 0 }}>
-            {openVisitGroup ? `${openVisitGroup.photos.length} photo${openVisitGroup.photos.length !== 1 ? 's' : ''}` : `${photos.length} photo${photos.length !== 1 ? 's' : ''}`}
+            {openEpisodeGroup
+              ? `${openEpisodeGroup.photos.length} photo${openEpisodeGroup.photos.length !== 1 ? 's' : ''}`
+              : `${photos.length} photo${photos.length !== 1 ? 's' : ''}`}
           </p>
         </div>
-        {!openVisitGroup && (
+        {!openEpisodeGroup && (
           <div className="view-toggle">
             <button className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}>Grid</button>
-            <button className={`toggle-btn ${viewMode === 'visits' ? 'active' : ''}`} onClick={() => setViewMode('visits')}>Visits</button>
+            <button className={`toggle-btn ${viewMode === 'episodes' ? 'active' : ''}`} onClick={() => setViewMode('episodes')}>Episodes</button>
+          </div>
+        )}
+        {openEpisodeGroup && canEdit && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {editingEpisodeKey === openEpisodeGroup.key ? (
+              <>
+                <input
+                  ref={editInputRef}
+                  value={editingEpisodeTitle}
+                  onChange={e => setEditingEpisodeTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveEpisodeTitle(openEpisodeGroup.key, editingEpisodeTitle); if (e.key === 'Escape') setEditingEpisodeKey(null) }}
+                  placeholder="Episode title…"
+                  style={{ padding: '6px 10px', background: '#fff', border: '1px solid #C9B99A', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none', width: 200 }}
+                />
+                <button className="episode-edit-btn" onClick={() => saveEpisodeTitle(openEpisodeGroup.key, editingEpisodeTitle)}>Save</button>
+                <button className="episode-edit-btn" style={{ color: '#9A8F82' }} onClick={() => setEditingEpisodeKey(null)}>Cancel</button>
+              </>
+            ) : (
+              <button className="episode-edit-btn" onClick={() => startEditingEpisode(openEpisodeGroup.key, openEpisodeGroup.episode?.title ?? null)}>
+                {openEpisodeGroup.episode?.title ? 'Edit title' : '+ Add title'}
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {!openVisitGroup && canEdit && (
+      {/* Upload zone */}
+      {!openEpisodeGroup && canEdit && (
         <div className="upload-zone" style={{ marginBottom: 40 }} onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}>
           <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => e.target.files && handleUpload(e.target.files)} />
           <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 16 }}>
             {uploading ? 'Uploading…' : 'Drop photos here or click to upload'}
           </div>
           <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E', marginBottom: 16 }}>JPG, PNG, HEIC · multiple files supported</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }} onClick={e => e.stopPropagation()}>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Site visit date</span>
-            <input type="date" value={visitDate} onChange={e => setVisitDate(e.target.value)} style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Episode date</span>
+              <input
+                type="date"
+                value={episodeDate}
+                onChange={e => setEpisodeDate(e.target.value)}
+                style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none' }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Episode title</span>
+              <input
+                type="text"
+                value={episodeTitleInput}
+                onChange={e => setEpisodeTitleInput(e.target.value)}
+                placeholder="Optional"
+                style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none', width: 180 }}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -286,12 +419,12 @@ export default function PhotosPage() {
         <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82' }}>Loading photos…</div>
       ) : photos.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 0', fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#B0A89E' }}>No photos yet.</div>
-      ) : openVisitGroup ? (
+      ) : openEpisodeGroup ? (
         <div>
-          <button className="visit-back" onClick={() => setOpenVisit(null)}>← All visits</button>
+          <button className="episode-back" onClick={() => setOpenEpisode(null)}>← All episodes</button>
           <div className="photo-grid">
-            {openVisitGroup.photos.map(photo => (
-              <div key={photo.id} className="photo-thumb" onClick={() => openLightbox(photo, openVisitGroup.photos)}>
+            {openEpisodeGroup.photos.map(photo => (
+              <div key={photo.id} className="photo-thumb" onClick={() => openLightbox(photo, openEpisodeGroup.photos)}>
                 <img src={photo.image_url} alt={photo.caption || 'Site photo'} />
                 {photo.caption && <div className="caption-overlay">{photo.caption}</div>}
               </div>
@@ -313,21 +446,24 @@ export default function PhotosPage() {
           </div>
         ))
       ) : (
-        <div className="visits-grid">
+        <div className="episodes-grid">
           {dayGroups.map(group => {
             const thumbs = group.photos.slice(0, 3)
             const uploader = uploaderLabel(group.photos)
+            const displayTitle = episodeDisplayTitle(group)
+            const hasCustomTitle = !!group.episode?.title
             return (
-              <div key={group.key} className="visit-folder" onClick={() => setOpenVisit(group.key)}>
-                <div className="visit-thumb-strip">
+              <div key={group.key} className="episode-folder" onClick={() => setOpenEpisode(group.key)}>
+                <div className="episode-thumb-strip">
                   {thumbs.map(p => <div key={p.id}><img src={p.image_url} alt="" /></div>)}
-                  {Array.from({ length: 3 - thumbs.length }).map((_, i) => <div key={i} className="visit-thumb-blank" />)}
+                  {Array.from({ length: 3 - thumbs.length }).map((_, i) => <div key={i} className="episode-thumb-blank" />)}
                 </div>
-                <div className="visit-info">
-                  <p className="visit-date">{group.label}</p>
-                  <div className="visit-info-row">
-                    <p className="visit-count">{group.sublabel}</p>
-                    {uploader && <span className="visit-uploader">{uploader}</span>}
+                <div className="episode-info">
+                  <p className="episode-title">{displayTitle}</p>
+                  {hasCustomTitle && <p className="episode-date-sub">{group.label}</p>}
+                  <div className="episode-info-row">
+                    <p className="episode-count">{group.sublabel}</p>
+                    {uploader && <span className="episode-uploader">{uploader}</span>}
                   </div>
                 </div>
               </div>
