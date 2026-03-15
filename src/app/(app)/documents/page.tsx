@@ -3,10 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-
-const CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices', 'Permits', 'Insurance', 'Specs', 'Other']
-const SUBCATEGORY_CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices', 'Insurance']
-const SUBCATEGORIES = ['Architect', 'Engineers', 'Designers', 'Contractors', 'Other']
+import { DOCUMENT_SUBCATEGORIES, PARTY_TYPE_CATEGORIES, PARTY_TYPES } from '@/lib/constants'
 
 type Document = {
   id: string; title: string; category: string; subcategory: string | null
@@ -37,8 +34,10 @@ export default function DocumentsPage() {
   const [hasAnyAccess, setHasAnyAccess] = useState(true)
   const [editableCategories, setEditableCategories] = useState<Set<string>>(new Set())
   const [categoryAccess, setCategoryAccess] = useState<Record<string, string>>({})
-  const [batchCategory, setBatchCategory] = useState(urlCategory && CATEGORIES.includes(urlCategory) ? urlCategory : 'Contracts')
-  const [batchSubcategory, setBatchSubcategory] = useState('Architect')
+  const [batchCategory, setBatchCategory] = useState(
+    urlCategory && DOCUMENT_SUBCATEGORIES.includes(urlCategory as any) ? urlCategory : 'Contracts'
+  )
+  const [batchPartyType, setBatchPartyType] = useState('Architect')
   const [batchVersion, setBatchVersion] = useState('v1')
   const [queue, setQueue] = useState<QueuedFile[]>([])
   const [uploading, setUploading] = useState(false)
@@ -60,15 +59,17 @@ export default function DocumentsPage() {
       const memberRow = memberRows.find(r => r.project_id === pid)
       const role = memberRow?.role ?? 'other'
       if (['owner', 'co-owner'].includes(role)) {
-        setHasAnyAccess(true); setCanEdit(true); setEditableCategories(new Set(CATEGORIES))
-        setCategoryAccess(Object.fromEntries(CATEGORIES.map(c => [c, 'edit'])))
+        setHasAnyAccess(true)
+        setCanEdit(true)
+        setEditableCategories(new Set(DOCUMENT_SUBCATEGORIES))
+        setCategoryAccess(Object.fromEntries(DOCUMENT_SUBCATEGORIES.map(c => [c, 'edit'])))
       } else {
         const { data: perms } = await supabase.rpc('get_my_permissions', { p_project_id: pid })
         const editableCats = new Set<string>()
         const access: Record<string, string> = {}
         let anyAccess = false
-        for (const cat of CATEGORIES) {
-          const key = `documents_${cat.toLowerCase()}`
+        for (const cat of DOCUMENT_SUBCATEGORIES) {
+          const key = `documents_${cat.toLowerCase().replace(' ', '_')}`
           const level = perms?.find((p: any) => p.section === key)?.access_level ?? 'none'
           access[cat] = level
           if (level !== 'none') anyAccess = true
@@ -88,14 +89,16 @@ export default function DocumentsPage() {
 
   function openUploadModal() {
     if (urlCategory && editableCategories.has(urlCategory)) setBatchCategory(urlCategory)
-    else { const first = CATEGORIES.find(c => editableCategories.has(c)); if (first) setBatchCategory(first) }
+    else { const first = Array.from(DOCUMENT_SUBCATEGORIES).find(c => editableCategories.has(c)); if (first) setBatchCategory(first) }
     setShowUpload(true)
   }
 
   function canEditCategory(cat: string) { return editableCategories.has(cat) }
 
   function addFiles(files: FileList | File[]) {
-    const newItems: QueuedFile[] = Array.from(files).map(f => ({ id: crypto.randomUUID(), file: f, title: cleanTitle(f.name), status: 'pending' }))
+    const newItems: QueuedFile[] = Array.from(files).map(f => ({
+      id: crypto.randomUUID(), file: f, title: cleanTitle(f.name), status: 'pending'
+    }))
     setQueue(prev => [...prev, ...newItems])
   }
 
@@ -109,7 +112,7 @@ export default function DocumentsPage() {
   async function handleUploadAll() {
     if (!projectId || queue.filter(f => f.status === 'pending').length === 0) return
     setUploading(true); setUploadError(null)
-    const needsSub = SUBCATEGORY_CATEGORIES.includes(batchCategory)
+    const needsPartyType = PARTY_TYPE_CATEGORIES.includes(batchCategory as any)
     const newDocs: Document[] = []
     for (const item of queue) {
       if (item.status !== 'pending') continue
@@ -120,10 +123,16 @@ export default function DocumentsPage() {
       if (storageError) { setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: storageError.message } : f)); continue }
       const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(`${projectId}/${fileName}`)
       const { data: newDoc, error: dbError } = await supabase.from('documents').insert({
-        project_id: projectId, title: item.title, category: batchCategory,
-        subcategory: needsSub ? batchSubcategory : null, version_label: batchVersion,
-        version_group: crypto.randomUUID(), document_date: null,
-        upload_date: new Date().toISOString(), file_url: publicUrl, is_current: true,
+        project_id: projectId,
+        title: item.title,
+        category: batchCategory,
+        subcategory: needsPartyType ? batchPartyType : null,
+        version_label: batchVersion,
+        version_group: crypto.randomUUID(),
+        document_date: null,
+        upload_date: new Date().toISOString(),
+        file_url: publicUrl,
+        is_current: true,
       }).select().single()
       if (dbError) { setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: JSON.stringify(dbError) } : f)); continue }
       if (newDoc) newDocs.push(newDoc)
@@ -147,14 +156,14 @@ export default function DocumentsPage() {
   const filtered = activeCategory === 'All' ? documents : documents.filter(d => d.category === activeCategory)
 
   function groupDocuments(docs: Document[]) {
-    if (activeCategory !== 'All' && SUBCATEGORY_CATEGORIES.includes(activeCategory)) {
+    if (activeCategory !== 'All' && PARTY_TYPE_CATEGORIES.includes(activeCategory as any)) {
       const groups: Record<string, Document[]> = {}
-      for (const sub of SUBCATEGORIES) { const s = docs.filter(d => d.subcategory === sub); if (s.length) groups[sub] = s }
+      for (const pt of PARTY_TYPES) { const s = docs.filter(d => d.subcategory === pt); if (s.length) groups[pt] = s }
       const unsorted = docs.filter(d => !d.subcategory); if (unsorted.length) groups['General'] = unsorted
       return groups
     } else {
       const groups: Record<string, Document[]> = {}
-      for (const cat of CATEGORIES) { const c = docs.filter(d => d.category === cat); if (c.length) groups[cat] = c }
+      for (const cat of DOCUMENT_SUBCATEGORIES) { const c = docs.filter(d => d.category === cat); if (c.length) groups[cat] = c }
       return groups
     }
   }
@@ -162,8 +171,8 @@ export default function DocumentsPage() {
   const grouped = groupDocuments(filtered)
   const pendingCount = queue.filter(f => f.status === 'pending').length
   const doneCount = queue.filter(f => f.status === 'done').length
-  const needsSubcategory = SUBCATEGORY_CATEGORIES.includes(batchCategory)
-  const uploadableCategories = CATEGORIES.filter(c => editableCategories.has(c))
+  const needsPartyType = PARTY_TYPE_CATEGORIES.includes(batchCategory as any)
+  const uploadableCategories = Array.from(DOCUMENT_SUBCATEGORIES).filter(c => editableCategories.has(c))
 
   function closeModal() { if (uploading) return; setShowUpload(false); setQueue([]); setUploadError(null) }
 
@@ -260,11 +269,11 @@ export default function DocumentsPage() {
                   <input type="text" value={batchVersion} onChange={e => setBatchVersion(e.target.value)} placeholder="v1" disabled={uploading} />
                 </div>
               </div>
-              {needsSubcategory && (
+              {needsPartyType && (
                 <div className="field">
-                  <label>Subcategory</label>
-                  <select value={batchSubcategory} onChange={e => setBatchSubcategory(e.target.value)} disabled={uploading}>
-                    {SUBCATEGORIES.map(s => <option key={s}>{s}</option>)}
+                  <label>Party Type</label>
+                  <select value={batchPartyType} onChange={e => setBatchPartyType(e.target.value)} disabled={uploading}>
+                    {PARTY_TYPES.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
               )}

@@ -5,7 +5,7 @@ import { useState, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { switchProject } from '@/actions/projects'
 
-const DOC_CATEGORIES = ['Contracts', 'Drawings', 'Budgets', 'Invoices', 'Permits', 'Insurance', 'Specs', 'Other']
+import { DOCUMENT_SUBCATEGORIES } from '@/lib/constants'
 
 interface Project {
   id: string
@@ -161,7 +161,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
 
         {/* Document categories */}
         <div className="doc-categories">
-          {DOC_CATEGORIES.map(cat => {
+          {DOCUMENT_SUBCATEGORIES.map(cat => {
             const access = getDocCategoryAccess(cat)
             const isDisabled = access === 'none'
             return (
