@@ -27,8 +27,9 @@ export default async function HomePage() {
     .from('project_members').select('project_id, role').eq('user_id', user.id).eq('status', 'active')
   if (!memberRows?.length) redirect('/onboarding')
 
-  const selectedId = cookieStore.get('selected_project_id')?.value
-  const pid = (selectedId && memberRows.some(r => r.project_id === selectedId))
+const selectedId = cookieStore.get('selected_project_id')?.value
+console.log('SERVER: selectedId from cookie:', selectedId)
+const pid = (selectedId && memberRows.some(r => r.project_id === selectedId))
     ? selectedId
     : memberRows[0].project_id
 
