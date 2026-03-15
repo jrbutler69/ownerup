@@ -39,7 +39,6 @@ export default function HomePage() {
       const ownerOrCo = ['owner', 'co-owner'].includes(role)
       setIsOwnerOrCo(ownerOrCo)
 
-      // Fetch project info and team members
       const [projectRes, teamRes] = await Promise.all([
         supabase.from('projects').select('name, address, start_date, target_completion').eq('id', pid).single(),
         supabase.from('project_members').select('invited_email, role, status').eq('project_id', pid).eq('status', 'active'),
@@ -47,13 +46,11 @@ export default function HomePage() {
       if (projectRes.data) setProject(projectRes.data)
       setMembers(teamRes.data ?? [])
 
-      // Determine permissions
       let permsMap: Record<string, string> = {}
       if (ownerOrCo) {
         permsMap = { documents: 'edit', photos: 'edit', renderings: 'edit', notes: 'edit' }
       } else {
         const { data: perms } = await supabase.rpc('get_my_permissions', { p_project_id: pid })
-        // Check if any document category has access
         const docAccess = ['documents_contracts','documents_drawings','documents_budgets','documents_invoices',
           'documents_permits','documents_insurance','documents_specs','documents_other']
           .some(k => (perms?.find((p: any) => p.section === k)?.access_level ?? 'none') !== 'none')
@@ -66,7 +63,6 @@ export default function HomePage() {
       }
       setPermissions(permsMap)
 
-      // Only fetch data for accessible sections
       const [docsRes, photosRes, renderingsRes, notesRes, timelineRes] = await Promise.all([
         permsMap.documents !== 'none'
           ? supabase.from('documents').select('*').eq('project_id', pid).eq('is_current', true).order('upload_date', { ascending: false }).limit(4)
@@ -95,15 +91,23 @@ export default function HomePage() {
     load()
   }, [])
 
+const allEmpty = !loading &&
+    data.documents.length === 0 &&
+    data.photos.length === 0 &&
+    data.renderings.length === 0 &&
+    data.notes.length === 0
+
   return (
     <div className="home">
-      <div className="view-toggle">
-        <button className={`toggle-btn ${view === 'overview' ? 'active' : ''}`} onClick={() => setView('overview')}>Overview</button>
-        <button className={`toggle-btn ${view === 'timeline' ? 'active' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
-      </div>
+      {!loading && !allEmpty && (
+        <div className="view-toggle">
+          <button className={`toggle-btn ${view === 'overview' ? 'active' : ''}`} onClick={() => setView('overview')}>Overview</button>
+          <button className={`toggle-btn ${view === 'timeline' ? 'active' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
+        </div>
+      )}
 
       {view === 'overview'
-        ? <OverviewContent data={data} loading={loading} router={router} permissions={permissions} project={project} members={members} />
+        ? <OverviewContent data={data} loading={loading} router={router} permissions={permissions} project={project} members={members} allEmpty={allEmpty} />
         : <TimelineContent items={data.timeline} loading={loading} permissions={permissions} />
       }
 
@@ -124,11 +128,12 @@ export default function HomePage() {
   )
 }
 
-function OverviewContent({ data, loading, router, permissions, project, members }: {
+function OverviewContent({ data, loading, router, permissions, project, members, allEmpty }: {
   data: any; loading: boolean; router: any
   permissions: Record<string, string>
   project: any
   members: any[]
+  allEmpty: boolean
 }) {
   function formatDate(s: string) {
     if (!s) return '—'
@@ -138,6 +143,16 @@ function OverviewContent({ data, loading, router, permissions, project, members 
   function formatFullDate(s: string) {
     if (!s) return '—'
     return new Date(s).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  }
+
+  if (allEmpty) {
+    return (
+      <div style={{ padding: '48px 0' }}>
+        <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '22px', fontWeight: 300, fontStyle: 'italic', color: '#7A7468', margin: 0, lineHeight: 1.6 }}>
+          Add documents, photos, renderings and notes or invite team members at left.
+        </p>
+      </div>
+    )
   }
 
   // Build the 4 tiles in priority order
@@ -291,7 +306,6 @@ function OverviewContent({ data, loading, router, permissions, project, members 
     allTiles.push(fb)
   }
 
-  // Arrange into 2x2 grid: [0,1] top row, [2,3] bottom row
   const [tl, tr, bl, br] = allTiles
 
   return (
@@ -306,24 +320,7 @@ function OverviewContent({ data, loading, router, permissions, project, members 
       <style jsx>{`
         .overview { animation: fadeUp 0.3s ease; }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-        .sections { display: grid; grid-template-columns: 1fr 1fr; }
-
-        .section-left { padding: 32px 48px 32px 0; border-right: 1px solid #E8E3DC; border-bottom: 1px solid #E8E3DC; }
-        .section-right { padding: 32px 0 32px 48px; border-bottom: 1px solid #E8E3DC; }
-        .section-bottom { border-bottom: none; }
-
-        .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 16px; }
-        .section-title { font-family: 'DM Mono', monospace !important; font-size: 11px !important; letter-spacing: 0.2em !important; text-transform: uppercase !important; color: #7A7468 !important; font-weight: 400 !important; }
-
-        .view-all {
-          background: none; border: none; font-family: 'DM Mono', monospace;
-          font-size: 9px; letter-spacing: 0.1em; color: #B0A898; cursor: pointer; padding: 0; transition: color 0.15s;
-        }
-        .view-all:hover { color: #1A1814; }
-
         .empty-state { font-family: 'Cormorant Garamond', serif; font-size: 15px; font-style: italic; font-weight: 300; color: #C0B8AE; margin: 0; }
-
         .row {
           display: flex; align-items: baseline; justify-content: space-between;
           padding: 10px 0; border-bottom: 1px solid #F0EBE4; gap: 16px;
@@ -332,19 +329,11 @@ function OverviewContent({ data, loading, router, permissions, project, members 
         .row:last-child { border-bottom: none; }
         .row-name { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 400; color: #1A1814; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         a.row:hover .row-name { color: #8B6F4E; }
-        .note-body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .row-meta { font-size: 9px; letter-spacing: 0.08em; color: #B0A898; white-space: nowrap; flex-shrink: 0; }
-
-        .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; }
+        .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: '100%'; }
         .photo-thumb { aspect-ratio: 1; overflow: hidden; background: #E8E3DC; cursor: pointer; min-width: 0; }
         .photo-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
         .photo-thumb:hover img { transform: scale(1.04); }
-
-        .info-rows { display: flex; flex-direction: column; gap: 0; }
-        .info-row { display: flex; flex-direction: column; padding: 10px 0; border-bottom: 1px solid #F0EBE4; }
-        .info-row:last-child { border-bottom: none; }
-        .info-label { display: block; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #B0A898; margin-bottom: 4px; }
-        .info-value { display: block; font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 400; color: #1A1814; }
       `}</style>
     </div>
   )
@@ -365,17 +354,15 @@ function TimelineContent({ items, loading, permissions }: { items: any[]; loadin
     budget_update: { label: 'Budget',    color: '#8C6B6B' },
   }
 
-  // Filter timeline items to only show what the user has access to
   const allowedTypes = new Set<string>()
   if (permissions.documents !== 'none') allowedTypes.add('document')
   if (permissions.photos !== 'none') allowedTypes.add('photo')
   if (permissions.renderings !== 'none') allowedTypes.add('rendering')
   if (permissions.notes !== 'none') allowedTypes.add('note')
-  // decisions and budget_update only shown if owner/co-owner (they'd have all permissions set)
   if (permissions.documents === 'edit') { allowedTypes.add('decision'); allowedTypes.add('budget_update') }
 
   const filtered = Object.keys(permissions).length === 0
-    ? items // still loading permissions, show all temporarily
+    ? items
     : items.filter(item => allowedTypes.has(item.event_type))
 
   return (
