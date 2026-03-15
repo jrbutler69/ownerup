@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { Suspense } from 'react'
 
-export default function HomePage() {
+function HomePageInner() {
   const [view, setView] = useState<'overview' | 'timeline'>('overview')
   const [loading, setLoading] = useState(true)
   const [project, setProject] = useState<{ name: string; address: string; start_date: string; target_completion: string } | null>(null)
@@ -21,19 +22,25 @@ export default function HomePage() {
 
   const supabase = createClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const pidFromUrl = searchParams.get('pid')
 
   useEffect(() => {
     async function load() {
+      setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
       const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
-      console.log('cookiePid:', cookiePid)
       const { data: memberRows } = await supabase
         .from('project_members').select('project_id, role').eq('user_id', user.id).eq('status', 'active')
       if (!memberRows?.length) { router.push('/onboarding'); return }
-      const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid)
-        ? cookiePid : memberRows[0].project_id
+
+      const pid = (pidFromUrl && memberRows.some(r => r.project_id === pidFromUrl))
+        ? pidFromUrl
+        : (cookiePid && memberRows.some(r => r.project_id === cookiePid))
+          ? cookiePid
+          : memberRows[0].project_id
 
       const memberRow = memberRows.find(r => r.project_id === pid)
       const role = memberRow?.role ?? 'other'
@@ -90,7 +97,7 @@ export default function HomePage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [pidFromUrl])
 
   const allEmpty = !loading &&
     data.documents.length === 0 &&
@@ -126,6 +133,14 @@ export default function HomePage() {
         .toggle-btn.active { color: #1A1814; border-bottom-color: #1A1814; }
       `}</style>
     </div>
+  )
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <HomePageInner />
+    </Suspense>
   )
 }
 
