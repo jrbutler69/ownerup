@@ -46,7 +46,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
   // Returns true if user has any document access at all
   function hasAnyDocAccess(): boolean {
     if (isOwnerOrCoOwner) return true
-    return DOC_CATEGORIES.some(cat => getDocCategoryAccess(cat) !== 'none')
+    return Array.from(DOCUMENT_SUBCATEGORIES).some(cat => getDocCategoryAccess(cat) !== 'none')
   }
 
   async function handleSignOut() {
