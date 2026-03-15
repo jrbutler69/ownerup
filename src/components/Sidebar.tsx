@@ -55,11 +55,11 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
   }
 
  async function handleSwitchProject(projectId: string) {
-  await switchProject(projectId)
   const form = document.createElement('form')
   form.method = 'GET'
   form.action = '/home'
   document.body.appendChild(form)
+  switchProject(projectId)
   form.submit()
 }
 
