@@ -55,12 +55,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
   }
 
   async function handleSwitchProject(projectId: string) {
-  try {
-    await switchProject(projectId)
-  } catch (e) {
-    console.error('switchProject error:', e)
-  }
-  setShowSwitcher(false)
+  console.log('switching to:', projectId)
   window.location.href = `/switching?pid=${projectId}`
 }
 
