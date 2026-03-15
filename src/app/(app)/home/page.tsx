@@ -28,7 +28,9 @@ export default function HomePage() {
 console.log('user:', user?.id, user?.email)
 if (!user) return
 
-      const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
+      const urlParams = new URLSearchParams(window.location.search)
+      const urlPid = urlParams.get('switched')
+      const cookiePid = urlPid ?? document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
       const { data: memberRows } = await supabase
         .from('project_members').select('project_id, role').eq('user_id', user.id).eq('status', 'active')
       if (!memberRows?.length) { router.push('/onboarding'); return }
