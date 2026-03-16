@@ -78,6 +78,8 @@ const pid = (selectedId && memberRows.some(r => r.project_id === selectedId))
       project={projectData}
       members={teamRes.data ?? []}
       permissions={permsMap}
+      projectId={pid}
+      userRole={role}
       data={{
         documents: docsRes.data ?? [],
         photos: photosRes.data ?? [],

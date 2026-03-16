@@ -2,11 +2,14 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { deleteProject } from '@/actions/projects'
 
-export default function HomeClient({ project, members, permissions, data }: {
+export default function HomeClient({ project, members, permissions, data, projectId, userRole }: {
   project: any
   members: any[]
   permissions: Record<string, string>
+  projectId: string
+  userRole: string
   data: {
     documents: any[]
     photos: any[]
@@ -16,7 +19,11 @@ export default function HomeClient({ project, members, permissions, data }: {
   }
 }) {
   const [view, setView] = useState<'overview' | 'timeline'>('overview')
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const router = useRouter()
+
+  const isOwner = userRole === 'owner'
 
   const allEmpty =
     data.documents.length === 0 &&
@@ -24,14 +31,47 @@ export default function HomeClient({ project, members, permissions, data }: {
     data.renderings.length === 0 &&
     data.notes.length === 0
 
+  async function handleDelete() {
+    setDeleting(true)
+    await deleteProject(projectId)
+  }
+
   return (
     <div className="home">
-      {!allEmpty && (
-        <div className="view-toggle">
-          <button className={`toggle-btn ${view === 'overview' ? 'active' : ''}`} onClick={() => setView('overview')}>Overview</button>
-          <button className={`toggle-btn ${view === 'timeline' ? 'active' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
-        </div>
-      )}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: allEmpty ? '0' : '40px' }}>
+        {!allEmpty && (
+          <div className="view-toggle">
+            <button className={`toggle-btn ${view === 'overview' ? 'active' : ''}`} onClick={() => setView('overview')}>Overview</button>
+            <button className={`toggle-btn ${view === 'timeline' ? 'active' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
+          </div>
+        )}
+        {isOwner && !confirming && (
+          <button
+            onClick={() => setConfirming(true)}
+            style={{ background: 'none', border: 'none', fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A898', cursor: 'pointer', padding: '0', marginLeft: 'auto' }}
+          >
+            Delete project
+          </button>
+        )}
+        {isOwner && confirming && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginLeft: 'auto' }}>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.12em', color: '#7A7468' }}>Delete this project and all its data?</span>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              style={{ background: 'none', border: 'none', fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C0392B', cursor: 'pointer', padding: '0' }}
+            >
+              {deleting ? 'Deleting…' : 'Yes, delete'}
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              style={{ background: 'none', border: 'none', fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A898', cursor: 'pointer', padding: '0' }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
 
       {view === 'overview'
         ? <OverviewContent data={data} router={router} permissions={permissions} project={project} members={members} allEmpty={allEmpty} />
@@ -42,7 +82,7 @@ export default function HomeClient({ project, members, permissions, data }: {
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=DM+Mono:wght@300;400&display=swap');
         .home { font-family: 'DM Mono', monospace; animation: fadeIn 0.35s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        .view-toggle { display: flex; align-items: center; gap: 24px; margin-bottom: 40px; }
+        .view-toggle { display: flex; align-items: center; gap: 24px; }
         .toggle-btn {
           background: none; border: none; border-bottom: 1px solid transparent;
           font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.18em;

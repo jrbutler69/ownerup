@@ -108,3 +108,46 @@ export async function createProject(formData: FormData) {
 
   redirect('/home')
 }
+export async function deleteProject(projectId: string) {
+  const cookieStore = await cookies()
+
+  const anonClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  const { data: { user } } = await anonClient.auth.getUser()
+  if (!user) redirect('/login')
+
+  // Verify the user is the owner
+  const { data: member } = await anonClient
+    .from('project_members')
+    .select('role')
+    .eq('project_id', projectId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (member?.role !== 'owner') throw new Error('Only the owner can delete a project')
+
+  const adminClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  await adminClient.from('projects').delete().eq('id', projectId)
+
+  // Clear the selected project cookie
+  cookieStore.delete('selected_project_id')
+
+  redirect('/home')
+}
