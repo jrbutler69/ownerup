@@ -274,7 +274,7 @@ export default function RenderingsPage() {
         .episode-back:hover { color: #1C1A17; }
         .episode-edit-btn { background: none; border: none; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #C9B99A; cursor: pointer; padding: 0; white-space: nowrap; transition: color 0.15s; }
         .episode-edit-btn:hover { color: #8b6f47; }
-        .lightbox-overlay { position: fixed; inset: 0; background: rgba(28,26,23,0.92); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .lightbox-overlay { position: fixed; inset: 0; background: rgba(28,26,23,0.92); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .lightbox-img { max-width: 90vw; max-height: 85vh; border-radius: 4px; object-fit: contain; }
         .lightbox-close { position: absolute; top: 24px; right: 32px; color: #F5F2EE; font-size: 28px; cursor: pointer; font-family: 'DM Mono', monospace; background: none; border: none; line-height: 1; }
         .lightbox-caption { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); color: #C9B99A; font-family: 'DM Mono', monospace; font-size: 13px; text-align: center; }
@@ -432,7 +432,6 @@ export default function RenderingsPage() {
       {lightbox && (
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
-          {canEdit && <button className="lightbox-delete" onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}>Delete</button>}
           {lightboxGroup.findIndex(r => r.id === lightbox.id) > 0 && (
             <button className="lightbox-nav lightbox-nav--prev" onClick={e => { e.stopPropagation(); lightboxNav(-1) }}>‹</button>
           )}
@@ -440,7 +439,19 @@ export default function RenderingsPage() {
           {lightboxGroup.findIndex(r => r.id === lightbox.id) < lightboxGroup.length - 1 && (
             <button className="lightbox-nav lightbox-nav--next" onClick={e => { e.stopPropagation(); lightboxNav(1) }}>›</button>
           )}
-          {lightbox.caption && <div className="lightbox-caption">{lightbox.caption}</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 16 }}>
+            {lightbox.caption && <div style={{ color: '#C9B99A', fontFamily: "'DM Mono', monospace", fontSize: 13, textAlign: 'center' }}>{lightbox.caption}</div>}
+            {canEdit && (
+              <button
+                onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}
+                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '6px 16px', transition: 'all 0.15s' }}
+                onMouseEnter={e => { (e.target as HTMLButtonElement).style.color = '#E8856A'; (e.target as HTMLButtonElement).style.borderColor = '#E8856A' }}
+                onMouseLeave={e => { (e.target as HTMLButtonElement).style.color = 'rgba(255,255,255,0.5)'; (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.2)' }}
+              >
+                Delete rendering
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

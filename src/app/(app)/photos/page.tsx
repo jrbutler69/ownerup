@@ -312,7 +312,7 @@ export default function PhotosPage() {
         .episode-title-input { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 400; color: #1C1A17; background: transparent; border: none; border-bottom: 1px solid #C9B99A; outline: none; width: 100%; padding: 0 0 2px; }
         .episode-edit-btn { background: none; border: none; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #C9B99A; cursor: pointer; padding: 0; white-space: nowrap; transition: color 0.15s; }
         .episode-edit-btn:hover { color: #8b6f47; }
-        .lightbox-overlay { position: fixed; inset: 0; background: rgba(28,26,23,0.94); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .lightbox-overlay { position: fixed; inset: 0; background: rgba(28,26,23,0.94); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .lightbox-img { max-width: 86vw; max-height: 85vh; border-radius: 4px; object-fit: contain; }
         .lightbox-close { position: absolute; top: 24px; right: 32px; color: #F5F2EE; font-size: 28px; cursor: pointer; font-family: 'DM Mono', monospace; background: none; border: none; line-height: 1; }
         .lightbox-delete { position: absolute; top: 24px; left: 32px; color: #E8856A; font-family: 'DM Mono', monospace; font-size: 12px; cursor: pointer; background: none; border: none; letter-spacing: 0.05em; }
@@ -483,7 +483,19 @@ export default function PhotosPage() {
           {lightboxGroup.findIndex(p => p.id === lightbox.id) < lightboxGroup.length - 1 && (
             <button className="lightbox-nav lightbox-nav--next" onClick={e => { e.stopPropagation(); lightboxNav(1) }}>›</button>
           )}
-          {lightbox.caption && <div className="lightbox-caption">{lightbox.caption}</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 16 }}>
+            {lightbox.caption && <div style={{ color: '#C9B99A', fontFamily: "'DM Mono', monospace", fontSize: 13, textAlign: 'center' }}>{lightbox.caption}</div>}
+            {canEdit && (
+              <button
+                onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}
+                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '6px 16px', transition: 'all 0.15s' }}
+                onMouseEnter={e => { (e.target as HTMLButtonElement).style.color = '#E8856A'; (e.target as HTMLButtonElement).style.borderColor = '#E8856A' }}
+                onMouseLeave={e => { (e.target as HTMLButtonElement).style.color = 'rgba(255,255,255,0.5)'; (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.2)' }}
+              >
+                Delete photo
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
