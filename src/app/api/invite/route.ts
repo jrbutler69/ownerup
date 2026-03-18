@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     await adminSupabase.from('project_permissions').insert(permissionRows)
 
     // Note: still using ownerup.app domain until metalog.app is configured
-    const inviteUrl = `https://ownerup.app/invite/${invite.token}`
+    const inviteUrl = `https://metalog.app/invite/${invite.token}`
 
     await resend.emails.send({
       from: 'Metalog <noreply@ownerup.app>',
