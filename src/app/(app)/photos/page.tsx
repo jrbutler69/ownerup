@@ -29,6 +29,13 @@ interface GroupedPhotos {
   episode?: Episode
 }
 
+interface QueuedPhoto {
+  id: string
+  file: File
+  status: 'pending' | 'uploading' | 'done' | 'error'
+  error?: string
+}
+
 function groupByWeek(photos: Photo[]): GroupedPhotos[] {
   const groups: Record<string, Photo[]> = {}
   for (const photo of photos) {
@@ -81,6 +88,7 @@ export default function PhotosPage() {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [queue, setQueue] = useState<QueuedPhoto[]>([])
   const [lightbox, setLightbox] = useState<Photo | null>(null)
   const [lightboxGroup, setLightboxGroup] = useState<Photo[]>([])
   const [projectId, setProjectId] = useState<string | null>(null)
@@ -95,6 +103,7 @@ export default function PhotosPage() {
   const [hasAnyAccess, setHasAnyAccess] = useState(true)
   const [editingEpisodeKey, setEditingEpisodeKey] = useState<string | null>(null)
   const [editingEpisodeTitle, setEditingEpisodeTitle] = useState('')
+  const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
 
@@ -122,7 +131,6 @@ export default function PhotosPage() {
         .from('episodes').select('*').eq('project_id', pid).eq('type', 'photos')
       if (episodeData) setEpisodes(episodeData)
 
-      // Fetch profile names for all uploaders
       const uploaderIds = [...new Set((photoData ?? []).map((p: Photo) => p.uploaded_by).filter(Boolean))] as string[]
       if (uploaderIds.length > 0) {
         const { data: profiles } = await supabase
@@ -149,6 +157,25 @@ export default function PhotosPage() {
     load()
   }, [])
 
+  function addFilesToQueue(files: FileList | File[]) {
+    const newItems: QueuedPhoto[] = Array.from(files).map(f => ({
+      id: crypto.randomUUID(),
+      file: f,
+      status: 'pending'
+    }))
+    setQueue(prev => [...prev, ...newItems])
+  }
+
+  function removeFromQueue(id: string) {
+    setQueue(prev => prev.filter(f => f.id !== id))
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(false)
+    if (e.dataTransfer.files.length > 0) addFilesToQueue(e.dataTransfer.files)
+  }
+
   async function getOrCreateEpisode(pid: string, date: string, title: string): Promise<Episode | null> {
     const existing = episodes.find(e => e.episode_date === date && e.type === 'photos')
     if (existing) {
@@ -171,19 +198,25 @@ export default function PhotosPage() {
     return null
   }
 
-  async function handleUpload(files: FileList) {
-    if (!projectId || !currentUserId || files.length === 0) return
+  async function handleUploadAll() {
+    if (!projectId || !currentUserId || queue.filter(f => f.status === 'pending').length === 0) return
     setUploading(true)
     setError(null)
 
     await getOrCreateEpisode(projectId, episodeDate, episodeTitleInput.trim())
 
     const newPhotos: Photo[] = []
-    for (const file of Array.from(files)) {
-      const ext = file.name.split('.').pop()
+    for (const item of queue) {
+      if (item.status !== 'pending') continue
+      setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'uploading' } : f))
+
+      const ext = item.file.name.split('.').pop()
       const filename = `${projectId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: uploadError } = await supabase.storage.from('photos').upload(filename, file)
-      if (uploadError) { setError(`Upload failed: ${uploadError.message}`); continue }
+      const { error: uploadError } = await supabase.storage.from('photos').upload(filename, item.file)
+      if (uploadError) {
+        setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: uploadError.message } : f))
+        continue
+      }
       const { data: { publicUrl } } = supabase.storage.from('photos').getPublicUrl(filename)
       const { data: newPhoto, error: dbError } = await supabase.from('photos').insert({
         project_id: projectId,
@@ -193,24 +226,29 @@ export default function PhotosPage() {
         caption: null,
         uploaded_by: currentUserId,
       }).select().single()
-      if (dbError) { setError(`DB error: ${dbError.message}`) }
-      else if (newPhoto) {
+
+      if (dbError) {
+        setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: dbError.message } : f))
+      } else if (newPhoto) {
         newPhotos.push(newPhoto)
-        // Add current user to profileNames if not already there
+        setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'done' } : f))
         if (!profileNames[currentUserId]) {
           const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single()
           if (profile) setProfileNames(prev => ({ ...prev, [currentUserId]: profile.full_name }))
         }
       }
     }
+
     if (newPhotos.length) setPhotos(prev => [...newPhotos, ...prev])
     setUploading(false)
-    setEpisodeTitleInput('')
-  }
 
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    if (e.dataTransfer.files.length > 0) handleUpload(e.dataTransfer.files)
+    // Clear queue if no errors
+    if (!queue.some(f => f.status === 'error')) {
+      setTimeout(() => {
+        setQueue([])
+        setEpisodeTitleInput('')
+      }, 800)
+    }
   }
 
   async function handleDelete(photo: Photo) {
@@ -269,6 +307,8 @@ export default function PhotosPage() {
   const weekGroups = groupByWeek(photos)
   const dayGroups = groupByDay(photos, episodes)
   const openEpisodeGroup = dayGroups.find(g => g.key === openEpisode)
+  const pendingCount = queue.filter(f => f.status === 'pending').length
+  const doneCount = queue.filter(f => f.status === 'done').length
 
   if (!loading && !hasAnyAccess) {
     return (
@@ -291,8 +331,8 @@ export default function PhotosPage() {
         .photo-thumb:hover img { transform: scale(1.04); }
         .caption-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(28,26,23,0.7)); color: #F5F2EE; font-family: 'DM Mono', monospace; font-size: 11px; padding: 20px 10px 8px; opacity: 0; transition: opacity 0.2s; }
         .photo-thumb:hover .caption-overlay { opacity: 1; }
-        .upload-zone { border: 1.5px dashed #C9B99A; border-radius: 6px; padding: 28px; text-align: center; cursor: pointer; background: #FAF8F5; transition: background 0.2s; margin-bottom: 40px; }
-        .upload-zone:hover { background: #F0EBE3; }
+        .upload-zone { border: 1.5px dashed #C9B99A; border-radius: 6px; padding: 28px; text-align: center; cursor: pointer; background: #FAF8F5; transition: background 0.2s; }
+        .upload-zone:hover, .upload-zone.drag-over { background: #F0EBE3; border-color: #8b6f47; }
         .group-label { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #9A8F82; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #E8E0D5; }
         .group-label:first-child { margin-top: 0; }
         .episodes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
@@ -325,6 +365,18 @@ export default function PhotosPage() {
         .toggle-btn:first-child { border-right: 1px solid #E8E0D5; }
         .toggle-btn.active { background: #1C1A17; color: #F0E8D8; }
         .toggle-btn:hover:not(.active) { background: #F5F2EE; color: #3A3530; }
+        .queue-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #fff; border: 1px solid #e8e0d5; border-radius: 2px; }
+        .queue-item--done { opacity: 0.6; }
+        .queue-item--error { border-color: #e8856a; background: #fdf5f2; }
+        .queue-status { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; font-size: 10px; font-weight: bold; flex-shrink: 0; }
+        .queue-status--pending { background: #e8e0d5; }
+        .queue-status--uploading { background: #e8f0e8; color: #4a7a4a; animation: pulse 1s infinite; }
+        .queue-status--done { background: #eef4ee; color: #4a7a4a; }
+        .queue-status--error { background: #fdf0ed; color: #c0532a; }
+        .queue-filename { font-family: 'DM Mono', monospace; font-size: 11px; color: #3a3530; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .queue-remove { background: none; border: none; color: #bbb0a0; font-size: 10px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; font-family: 'DM Mono', monospace; }
+        .queue-remove:hover { color: #c0532a; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
       `}</style>
 
       {/* Header */}
@@ -376,33 +428,101 @@ export default function PhotosPage() {
 
       {/* Upload zone */}
       {!openEpisodeGroup && canEdit && (
-        <div className="upload-zone" style={{ marginBottom: 40 }} onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}>
-          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => e.target.files && handleUpload(e.target.files)} />
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 16 }}>
-            {uploading ? 'Uploading…' : 'Drop photos here or click to upload'}
-          </div>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E', marginBottom: 16 }}>JPG, PNG, HEIC · multiple files supported</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Episode date</span>
-              <input
-                type="date"
-                value={episodeDate}
-                onChange={e => setEpisodeDate(e.target.value)}
-                style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none' }}
-              />
+        <div style={{ marginBottom: 40 }}>
+          {/* Drop zone */}
+          <div
+            className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
+            onDrop={handleDrop}
+            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onClick={() => fileInputRef.current?.click()}
+            style={{ marginBottom: queue.length > 0 ? 16 : 0 }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: 'none' }}
+              onChange={e => e.target.files && addFilesToQueue(e.target.files)}
+            />
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 12 }}>
+              Drop photos here or click to select
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Episode title</span>
-              <input
-                type="text"
-                value={episodeTitleInput}
-                onChange={e => setEpisodeTitleInput(e.target.value)}
-                placeholder="Optional"
-                style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none', width: 180 }}
-              />
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E', marginBottom: 16 }}>
+              JPG, PNG, HEIC · multiple files supported
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Episode date</span>
+                <input
+                  type="date"
+                  value={episodeDate}
+                  onChange={e => setEpisodeDate(e.target.value)}
+                  style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none' }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Episode title</span>
+                <input
+                  type="text"
+                  value={episodeTitleInput}
+                  onChange={e => setEpisodeTitleInput(e.target.value)}
+                  placeholder="Optional"
+                  style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none', width: 180 }}
+                />
+              </div>
             </div>
           </div>
+
+          {/* Queue */}
+          {queue.length > 0 && (
+            <div style={{ border: '1px solid #e8e0d5', borderRadius: 4, overflow: 'hidden', background: '#faf8f5' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #e8e0d5' }}>
+                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#6b6055' }}>
+                  {queue.length} file{queue.length !== 1 ? 's' : ''}{doneCount > 0 ? ` · ${doneCount} uploaded` : ''}
+                </span>
+                {!uploading && (
+                  <button
+                    onClick={() => setQueue([])}
+                    style={{ background: 'none', border: 'none', fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#9a8e7e', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: 8 }}>
+                {queue.map(item => (
+                  <div key={item.id} className={`queue-item queue-item--${item.status}`}>
+                    <span className={`queue-status queue-status--${item.status}`}>
+                      {item.status === 'pending' ? '' : item.status === 'uploading' ? '↑' : item.status === 'done' ? '✓' : '!'}
+                    </span>
+                    <span className="queue-filename">{item.file.name}</span>
+                    {item.error && <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#c0532a' }}>{item.error}</span>}
+                    {item.status === 'pending' && !uploading && (
+                      <button className="queue-remove" onClick={() => removeFromQueue(item.id)}>✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: '12px 16px', borderTop: '1px solid #e8e0d5', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => { setQueue([]); setEpisodeTitleInput('') }}
+                  disabled={uploading}
+                  style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, padding: '8px 16px', background: 'none', border: '1px solid #ddd5c8', borderRadius: 2, color: '#6b6055', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUploadAll}
+                  disabled={uploading || pendingCount === 0}
+                  style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: '0.08em', padding: '8px 20px', background: '#1c1a17', color: '#f0e8d8', border: 'none', borderRadius: 2, cursor: uploading || pendingCount === 0 ? 'not-allowed' : 'pointer', opacity: uploading || pendingCount === 0 ? 0.5 : 1 }}
+                >
+                  {uploading ? `Uploading… (${doneCount}/${queue.length})` : `Upload ${pendingCount} photo${pendingCount !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
