@@ -10,6 +10,7 @@ const SECTIONS = [
   { key: 'documents_invoices', label: 'Documents — Invoices' },
   { key: 'documents_permits', label: 'Documents — Permits' },
   { key: 'documents_insurance', label: 'Documents — Insurance' },
+  { key: 'documents_meeting_notes', label: 'Documents — Meeting Notes' },
   { key: 'documents_specs', label: 'Documents — Specs' },
   { key: 'documents_other', label: 'Documents — Other' },
   { key: 'photos', label: 'Photos' },
@@ -20,7 +21,7 @@ const SECTIONS = [
   { key: 'team', label: 'Team' },
 ]
 
-const ROLES = ['co-owner', 'architect', 'contractor', 'other']
+const ROLES = ['co-owner', 'architect', 'designer', 'engineer', 'contractor', 'client', 'other']
 
 type AccessLevel = 'none' | 'view' | 'edit'
 type Permissions = Record<string, AccessLevel>
@@ -42,6 +43,32 @@ function allEditPerms(): Permissions {
   return Object.fromEntries(SECTIONS.map(s => [s.key, 'edit' as AccessLevel]))
 }
 
+function defaultPermsForRole(role: string): Permissions {
+  if (role === 'co-owner') return allEditPerms()
+  const p = emptyPerms()
+  if (role === 'architect') {
+    SECTIONS.forEach(s => { p[s.key] = 'edit' })
+  } else if (role === 'designer') {
+    SECTIONS.forEach(s => { p[s.key] = 'view' })
+    p['documents_drawings'] = 'edit'
+    p['renderings'] = 'edit'
+    p['documents_meeting_notes'] = 'edit'
+  } else if (role === 'engineer') {
+    p['documents_drawings'] = 'view'
+    p['documents_specs'] = 'view'
+    p['documents_permits'] = 'view'
+  } else if (role === 'contractor') {
+    p['documents_drawings'] = 'view'
+    p['photos'] = 'edit'
+    p['documents_specs'] = 'view'
+  } else if (role === 'client') {
+    SECTIONS.forEach(s => { p[s.key] = 'view' })
+  } else if (role === 'other') {
+    SECTIONS.forEach(s => { p[s.key] = 'view' })
+  }
+  return p
+}
+
 export default function TeamPage() {
   const supabase = createClient()
   const [projectId, setProjectId] = useState<string | null>(null)
@@ -54,7 +81,7 @@ export default function TeamPage() {
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('contractor')
-  const [invitePermissions, setInvitePermissions] = useState<Permissions>(emptyPerms())
+  const [invitePermissions, setInvitePermissions] = useState<Permissions>(defaultPermsForRole('contractor'))
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteError, setInviteError] = useState('')
   const [inviteSuccess, setInviteSuccess] = useState('')
@@ -99,15 +126,13 @@ export default function TeamPage() {
     setLoading(false)
   }
 
-  // --- Invite helpers ---
-
   function setInvitePermission(section: string, level: AccessLevel) {
     setInvitePermissions(prev => ({ ...prev, [section]: level }))
   }
 
   function handleRoleChange(role: string) {
     setInviteRole(role)
-    setInvitePermissions(role === 'co-owner' ? allEditPerms() : emptyPerms())
+    setInvitePermissions(defaultPermsForRole(role))
   }
 
   async function handleInvite() {
@@ -123,16 +148,15 @@ export default function TeamPage() {
       setInviteError(json.error ?? 'Something went wrong')
     } else {
       setInviteSuccess(`Invite sent to ${inviteEmail}`)
-      setInviteEmail(''); setInviteRole('contractor')
-      setInvitePermissions(emptyPerms())
+      setInviteEmail('')
+      setInviteRole('contractor')
+      setInvitePermissions(defaultPermsForRole('contractor'))
       setShowInvite(false)
       const { data: allMembers } = await supabase.from('project_members').select('*').eq('project_id', projectId).order('created_at')
       setMembers(allMembers ?? [])
     }
     setInviteLoading(false)
   }
-
-  // --- Edit permissions helpers ---
 
   async function startEditPermissions(member: Member) {
     if (!projectId) return
@@ -182,8 +206,6 @@ export default function TeamPage() {
     setEditLoading(false)
   }
 
-  // --- Remove member ---
-
   async function handleRevoke(memberId: string) {
     if (!confirm('Remove this person from the project?')) return
     await supabase.from('project_members').delete().eq('id', memberId)
@@ -191,7 +213,7 @@ export default function TeamPage() {
     if (editingMemberId === memberId) setEditingMemberId(null)
   }
 
-  const statusLabel: Record<string, string> = { active: 'Active', pending: 'Invite pending', declined: 'Declined' }
+  const statusLabel: Record<string, string> = { active: 'Active', invited: 'Invite pending', declined: 'Declined' }
 
   if (!loading && !hasAnyAccess) {
     return (
@@ -271,16 +293,28 @@ export default function TeamPage() {
               </select>
             </div>
           </div>
-          {inviteRole !== 'co-owner' && (
+
+          {inviteRole === 'co-owner' ? (
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#6B8C6B', marginBottom: 24, padding: '10px 16px', background: '#F0F5F0', borderRadius: 3 }}>
+              Co-owners have full access to all sections.
+            </div>
+          ) : (
             <div style={{ marginBottom: 24 }}>
               <label className="field-label" style={{ marginBottom: 8 }}>Permissions</label>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#B0A89E', marginBottom: 8 }}>
+                Pre-filled based on role — adjust as needed.
+              </div>
               <div className="permissions-grid">
                 {SECTIONS.map(section => (
                   <div key={section.key} className="perm-row">
                     <span className="perm-label">{section.label}</span>
                     <div className="access-toggle">
                       {(['none', 'view', 'edit'] as AccessLevel[]).map(level => (
-                        <button key={level} className={`access-btn ${invitePermissions[section.key] === level ? `active-${level}` : ''}`} onClick={() => setInvitePermission(section.key, level)}>
+                        <button
+                          key={level}
+                          className={`access-btn ${invitePermissions[section.key] === level ? `active-${level}` : ''}`}
+                          onClick={() => setInvitePermission(section.key, level)}
+                        >
                           {level === 'none' ? 'None' : level === 'view' ? 'View' : 'View+Edit'}
                         </button>
                       ))}
@@ -290,12 +324,10 @@ export default function TeamPage() {
               </div>
             </div>
           )}
-          {inviteRole === 'co-owner' && (
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#6B8C6B', marginBottom: 24, padding: '10px 16px', background: '#F0F5F0', borderRadius: 3 }}>
-              Co-owners have full access to all sections.
-            </div>
+
+          {inviteError && (
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#C0532A', marginBottom: 16 }}>{inviteError}</div>
           )}
-          {inviteError && <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#C0532A', marginBottom: 16 }}>{inviteError}</div>}
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-primary" onClick={handleInvite} disabled={inviteLoading || !inviteEmail.trim()}>
               {inviteLoading ? 'Sending…' : 'Send invite'}
@@ -315,7 +347,9 @@ export default function TeamPage() {
             <div key={member.id} className="team-member-row">
               <div className="member-header">
                 <div>
-                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#1C1A17', marginBottom: 2 }}>{member.invited_email}</div>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#1C1A17', marginBottom: 2 }}>
+                    {member.invited_email}
+                  </div>
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#9A8F82', letterSpacing: '0.08em' }}>
                     {member.role} · {statusLabel[member.status] ?? member.status}
                   </div>

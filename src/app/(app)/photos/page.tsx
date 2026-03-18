@@ -85,7 +85,7 @@ export default function PhotosPage() {
   const [lightboxGroup, setLightboxGroup] = useState<Photo[]>([])
   const [projectId, setProjectId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [memberEmails, setMemberEmails] = useState<Record<string, string>>({})
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [openEpisode, setOpenEpisode] = useState<string | null>(null)
@@ -106,7 +106,7 @@ export default function PhotosPage() {
 
       const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
       const { data: memberRows } = await supabase
-        .from('project_members').select('project_id, role, user_id, invited_email').eq('status', 'active')
+        .from('project_members').select('project_id, role, user_id').eq('status', 'active')
       if (!memberRows?.length) return
 
       const myRows = memberRows.filter((r: any) => r.user_id === user.id)
@@ -114,22 +114,23 @@ export default function PhotosPage() {
       const pid = cookiePid && myRows.some((r: any) => r.project_id === cookiePid) ? cookiePid : myRows[0].project_id
       setProjectId(pid)
 
-      const projectMembers = memberRows.filter((r: any) => r.project_id === pid)
-      const emailMap: Record<string, string> = {}
-      for (const m of projectMembers) {
-        if (m.user_id && m.invited_email) emailMap[m.user_id] = m.invited_email
-      }
-      const ownerRow = projectMembers.find((r: any) => r.role === 'owner')
-      if (ownerRow?.user_id && !emailMap[ownerRow.user_id] && ownerRow.user_id === user.id) {
-        emailMap[ownerRow.user_id] = user.email ?? ''
-      }
-      setMemberEmails(emailMap)
-
-      const { data: photoData } = await supabase.from('photos').select('*').eq('project_id', pid).order('taken_at', { ascending: false })
+      const { data: photoData } = await supabase
+        .from('photos').select('*').eq('project_id', pid).order('taken_at', { ascending: false })
       if (photoData) setPhotos(photoData)
 
-      const { data: episodeData } = await supabase.from('episodes').select('*').eq('project_id', pid).eq('type', 'photos')
+      const { data: episodeData } = await supabase
+        .from('episodes').select('*').eq('project_id', pid).eq('type', 'photos')
       if (episodeData) setEpisodes(episodeData)
+
+      // Fetch profile names for all uploaders
+      const uploaderIds = [...new Set((photoData ?? []).map((p: Photo) => p.uploaded_by).filter(Boolean))] as string[]
+      if (uploaderIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles').select('id, full_name').in('id', uploaderIds)
+        const nameMap: Record<string, string> = {}
+        for (const p of profiles ?? []) nameMap[p.id] = p.full_name
+        setProfileNames(nameMap)
+      }
 
       setLoading(false)
 
@@ -149,10 +150,8 @@ export default function PhotosPage() {
   }, [])
 
   async function getOrCreateEpisode(pid: string, date: string, title: string): Promise<Episode | null> {
-    // Check if episode already exists for this date
     const existing = episodes.find(e => e.episode_date === date && e.type === 'photos')
     if (existing) {
-      // If a title was provided and episode has no title yet, update it
       if (title && !existing.title) {
         const { data: updated } = await supabase.from('episodes').update({ title }).eq('id', existing.id).select().single()
         if (updated) {
@@ -162,12 +161,8 @@ export default function PhotosPage() {
       }
       return existing
     }
-    // Create new episode
     const { data: newEpisode } = await supabase.from('episodes').insert({
-      project_id: pid,
-      episode_date: date,
-      type: 'photos',
-      title: title || null,
+      project_id: pid, episode_date: date, type: 'photos', title: title || null,
     }).select().single()
     if (newEpisode) {
       setEpisodes(prev => [...prev, newEpisode])
@@ -181,7 +176,6 @@ export default function PhotosPage() {
     setUploading(true)
     setError(null)
 
-    // Ensure episode record exists for this date
     await getOrCreateEpisode(projectId, episodeDate, episodeTitleInput.trim())
 
     const newPhotos: Photo[] = []
@@ -200,7 +194,14 @@ export default function PhotosPage() {
         uploaded_by: currentUserId,
       }).select().single()
       if (dbError) { setError(`DB error: ${dbError.message}`) }
-      else if (newPhoto) newPhotos.push(newPhoto)
+      else if (newPhoto) {
+        newPhotos.push(newPhoto)
+        // Add current user to profileNames if not already there
+        if (!profileNames[currentUserId]) {
+          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single()
+          if (profile) setProfileNames(prev => ({ ...prev, [currentUserId]: profile.full_name }))
+        }
+      }
     }
     if (newPhotos.length) setPhotos(prev => [...newPhotos, ...prev])
     setUploading(false)
@@ -254,10 +255,11 @@ export default function PhotosPage() {
   function uploaderLabel(groupPhotos: Photo[]): string | null {
     const uploaderIds = [...new Set(groupPhotos.map(p => p.uploaded_by).filter(Boolean))] as string[]
     if (uploaderIds.length === 0) return null
-    const emails = uploaderIds.map(id => memberEmails[id] ?? id)
-    if (emails.length === 1) return emails[0]
-    if (emails.length === 2) return `${emails[0]} & ${emails[1]}`
-    return `${emails[0]} +${emails.length - 1} others`
+    const names = uploaderIds.map(id => profileNames[id]).filter(Boolean)
+    if (names.length === 0) return null
+    if (names.length === 1) return names[0]
+    if (names.length === 2) return `${names[0]} & ${names[1]}`
+    return `${names[0]} +${names.length - 1} others`
   }
 
   function episodeDisplayTitle(group: GroupedPhotos): string {
@@ -308,15 +310,11 @@ export default function PhotosPage() {
         .episode-uploader { font-family: 'DM Mono', monospace; font-size: 9px; color: #B0A89E; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
         .episode-back { display: flex; align-items: center; gap: 8px; background: none; border: none; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #9A8F82; cursor: pointer; padding: 0; margin-bottom: 24px; transition: color 0.15s; }
         .episode-back:hover { color: #1C1A17; }
-        .episode-title-edit { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-        .episode-title-input { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 400; color: #1C1A17; background: transparent; border: none; border-bottom: 1px solid #C9B99A; outline: none; width: 100%; padding: 0 0 2px; }
         .episode-edit-btn { background: none; border: none; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #C9B99A; cursor: pointer; padding: 0; white-space: nowrap; transition: color 0.15s; }
         .episode-edit-btn:hover { color: #8b6f47; }
         .lightbox-overlay { position: fixed; inset: 0; background: rgba(28,26,23,0.94); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .lightbox-img { max-width: 86vw; max-height: 85vh; border-radius: 4px; object-fit: contain; }
         .lightbox-close { position: absolute; top: 24px; right: 32px; color: #F5F2EE; font-size: 28px; cursor: pointer; font-family: 'DM Mono', monospace; background: none; border: none; line-height: 1; }
-        .lightbox-delete { position: absolute; top: 24px; left: 32px; color: #E8856A; font-family: 'DM Mono', monospace; font-size: 12px; cursor: pointer; background: none; border: none; letter-spacing: 0.05em; }
-        .lightbox-caption { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); color: #C9B99A; font-family: 'DM Mono', monospace; font-size: 13px; text-align: center; white-space: nowrap; }
         .lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); background: none; border: none; color: rgba(255,255,255,0.5); font-size: 28px; cursor: pointer; padding: 16px; transition: color 0.15s; font-family: 'DM Mono', monospace; }
         .lightbox-nav:hover { color: #fff; }
         .lightbox-nav--prev { left: 16px; }
@@ -327,18 +325,13 @@ export default function PhotosPage() {
         .toggle-btn:first-child { border-right: 1px solid #E8E0D5; }
         .toggle-btn.active { background: #1C1A17; color: #F0E8D8; }
         .toggle-btn:hover:not(.active) { background: #F5F2EE; color: #3A3530; }
-        .episode-title-field { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
-        .episode-title-field input { padding: '6px 10px'; background: #fff; border: 1px solid #ddd5c8; border-radius: 2px; font-family: 'DM Mono', monospace; font-size: 12px; color: #1c1a17; outline: none; width: 220px; padding: 6px 10px; }
-        .episode-title-field input:focus { border-color: #8b6f47; }
       `}</style>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
         <div>
           <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 400, color: '#1C1A17', margin: '0 0 6px' }}>
-            {openEpisodeGroup
-              ? (openEpisodeGroup.episode?.title || openEpisodeGroup.label)
-              : 'Photos'}
+            {openEpisodeGroup ? (openEpisodeGroup.episode?.title || openEpisodeGroup.label) : 'Photos'}
           </h1>
           {openEpisodeGroup && openEpisodeGroup.episode?.title && (
             <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -475,7 +468,6 @@ export default function PhotosPage() {
       {lightbox && (
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
-          {canEdit && <button className="lightbox-delete" onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}>Delete</button>}
           {lightboxGroup.findIndex(p => p.id === lightbox.id) > 0 && (
             <button className="lightbox-nav lightbox-nav--prev" onClick={e => { e.stopPropagation(); lightboxNav(-1) }}>‹</button>
           )}
