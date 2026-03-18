@@ -104,7 +104,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
           </svg>
         </div>
         <div className="brand-text">
-          <span className="brand-name">OwnerUp</span>
+          <span className="brand-name">Metalog</span>
           <span className="brand-tagline">Construction Dashboard</span>
         </div>
       </div>
