@@ -4,19 +4,9 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
-const ROLES = [
-  { value: 'architect', label: 'Architect' },
-  { value: 'designer', label: 'Designer' },
-  { value: 'engineer', label: 'Engineer' },
-  { value: 'developer', label: 'Developer' },
-  { value: 'owner', label: 'Owner' },
-  { value: 'other', label: 'Other' },
-]
-
 export default function ProfileSetupPage() {
   const router = useRouter()
   const [fullName, setFullName] = useState('')
-  const [role, setRole] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -24,13 +14,22 @@ export default function ProfileSetupPage() {
     e.preventDefault()
     setError('')
     if (!fullName.trim()) { setError('Please enter your name.'); return }
-    if (!role) { setError('Please select a role.'); return }
 
     setLoading(true)
     try {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
+
+      // Get role from project membership if available
+      const { data: memberRows } = await supabase
+        .from('project_members')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+
+      const role = memberRows?.[0]?.role ?? 'other'
 
       const { error: profileError } = await supabase
         .from('profiles')
@@ -51,8 +50,8 @@ export default function ProfileSetupPage() {
     <div style={styles.page}>
       <div style={styles.box}>
         <div style={styles.logo}>METALOG</div>
-        <h1 style={styles.heading}>About you</h1>
-        <p style={styles.subtitle}>Before you continue, tell us a bit about yourself.</p>
+        <h1 style={styles.heading}>One more thing</h1>
+        <p style={styles.subtitle}>What's your name? This will be visible to other project members.</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.field}>
@@ -64,23 +63,8 @@ export default function ProfileSetupPage() {
               required
               autoFocus
               style={styles.input}
-              placeholder="e.g. James Butler"
+              placeholder="e.g. Bella Eichel"
             />
-          </div>
-
-          <div style={styles.field}>
-            <label style={styles.label}>YOUR ROLE <span style={styles.required}>*</span></label>
-            <select
-              value={role}
-              onChange={e => setRole(e.target.value)}
-              required
-              style={styles.input}
-            >
-              <option value="">Select a role...</option>
-              {ROLES.map(r => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
           </div>
 
           {error && <p style={styles.error}>{error}</p>}
