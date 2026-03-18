@@ -24,6 +24,15 @@ export default async function AppLayout({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Lazy profile check — if no profile exists, send to profile setup
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) redirect('/profile-setup')
+
   const { data: memberRows } = await supabase
     .from('project_members')
     .select('project_id, role')
@@ -42,11 +51,9 @@ export default async function AppLayout({
   const selectedId = cookieStore.get('selected_project_id')?.value
   const project = allProjects.find(p => p.id === selectedId) ?? allProjects[0]
 
-  // Get user's role for the selected project
   const memberRow = memberRows?.find(r => r.project_id === project?.id)
   const userRole = memberRow?.role ?? 'other'
 
-  // Owners and co-owners get full access — skip permissions fetch
   let permissions: Record<string, string> = {}
   if (!['owner', 'co-owner'].includes(userRole)) {
     const { data: permRows } = await supabase

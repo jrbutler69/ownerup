@@ -8,7 +8,7 @@ import { DOCUMENT_SUBCATEGORIES, PARTY_TYPE_CATEGORIES, PARTY_TYPES } from '@/li
 type Document = {
   id: string; title: string; category: string; subcategory: string | null
   version_label: string; document_date: string; upload_date: string
-  file_url: string; is_current: boolean
+  file_url: string; is_current: boolean; uploaded_by: string | null
 }
 
 type QueuedFile = {
@@ -42,6 +42,7 @@ export default function DocumentsPage() {
   const [queue, setQueue] = useState<QueuedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -80,8 +81,26 @@ export default function DocumentsPage() {
         setEditableCategories(editableCats)
         setCanEdit(editableCats.size > 0)
       }
-      const { data: docs } = await supabase.from('documents').select('*').eq('project_id', pid).order('upload_date', { ascending: false })
+
+      const { data: docs } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('project_id', pid)
+        .order('upload_date', { ascending: false })
       setDocuments(docs ?? [])
+
+      // Fetch profiles for all uploaders
+      const uploaderIds = [...new Set((docs ?? []).map((d: Document) => d.uploaded_by).filter(Boolean))] as string[]
+      if (uploaderIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', uploaderIds)
+        const nameMap: Record<string, string> = {}
+        for (const p of profiles ?? []) nameMap[p.id] = p.full_name
+        setProfileNames(nameMap)
+      }
+
       setLoading(false)
     }
     load()
@@ -113,6 +132,7 @@ export default function DocumentsPage() {
     if (!projectId || queue.filter(f => f.status === 'pending').length === 0) return
     setUploading(true); setUploadError(null)
     const needsPartyType = PARTY_TYPE_CATEGORIES.includes(batchCategory as any)
+    const { data: { user } } = await supabase.auth.getUser()
     const newDocs: Document[] = []
     for (const item of queue) {
       if (item.status !== 'pending') continue
@@ -133,9 +153,17 @@ export default function DocumentsPage() {
         upload_date: new Date().toISOString(),
         file_url: publicUrl,
         is_current: true,
+        uploaded_by: user?.id ?? null,
       }).select().single()
       if (dbError) { setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: JSON.stringify(dbError) } : f)); continue }
-      if (newDoc) newDocs.push(newDoc)
+      if (newDoc) {
+        newDocs.push(newDoc)
+        // Add uploader to profileNames if not already there
+        if (user?.id && !profileNames[user.id]) {
+          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+          if (profile) setProfileNames(prev => ({ ...prev, [user.id]: profile.full_name }))
+        }
+      }
       setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'done' } : f))
     }
     if (newDocs.length) setDocuments(prev => [...newDocs, ...prev])
@@ -228,7 +256,12 @@ export default function DocumentsPage() {
                   <div key={doc.id} className="doc-row-wrapper">
                     <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="doc-row">
                       <span className="doc-icon">◻</span>
-                      <span className="doc-title-text">{doc.title}</span>
+                      <div className="doc-title-col">
+                        <span className="doc-title-text">{doc.title}</span>
+                        {doc.uploaded_by && profileNames[doc.uploaded_by] && (
+                          <span className="doc-uploader">{profileNames[doc.uploaded_by]}</span>
+                        )}
+                      </div>
                       <span className="doc-version">{doc.version_label}</span>
                       {doc.is_current && <span className="doc-current">current</span>}
                       <span className="doc-date">
@@ -341,12 +374,14 @@ export default function DocumentsPage() {
         .doc-delete { opacity: 0; background: none; border: none; color: #c0532a; font-size: 11px; cursor: pointer; padding: 6px 8px; transition: opacity 0.15s; font-family: 'DM Mono', monospace; }
         .doc-row-wrapper:hover .doc-delete { opacity: 1; }
         .doc-delete:hover { color: #a03010; }
-        .doc-icon { font-size: 12px; color: #9a8e7e; }
-        .doc-title-text { flex: 1; font-size: 13px; color: #1c1a17; }
-        .doc-version { font-size: 10px; color: #9a8e7e; letter-spacing: 0.08em; }
-        .doc-current { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b8c6b; background: #eef4ee; padding: 2px 8px; border-radius: 10px; }
-        .doc-date { font-size: 11px; color: #bbb0a0; min-width: 100px; text-align: right; }
-        .doc-arrow { font-size: 12px; color: #bbb0a0; }
+        .doc-icon { font-size: 12px; color: #9a8e7e; flex-shrink: 0; }
+        .doc-title-col { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .doc-title-text { font-size: 13px; color: #1c1a17; }
+        .doc-uploader { font-size: 10px; color: #b0a898; letter-spacing: 0.04em; }
+        .doc-version { font-size: 10px; color: #9a8e7e; letter-spacing: 0.08em; flex-shrink: 0; }
+        .doc-current { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b8c6b; background: #eef4ee; padding: 2px 8px; border-radius: 10px; flex-shrink: 0; }
+        .doc-date { font-size: 11px; color: #bbb0a0; min-width: 100px; text-align: right; flex-shrink: 0; }
+        .doc-arrow { font-size: 12px; color: #bbb0a0; flex-shrink: 0; }
         .modal-overlay { position: fixed; inset: 0; background: rgba(28,26,23,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
         .modal { background: #faf8f5; border-radius: 3px; width: 580px; max-width: 90vw; max-height: 88vh; overflow-y: auto; padding: 32px; }
         .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }

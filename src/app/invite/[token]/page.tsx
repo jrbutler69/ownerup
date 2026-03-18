@@ -9,14 +9,15 @@ export default function InvitePage() {
   const router = useRouter()
   const supabase = createClient()
 
-  const [status, setStatus] = useState<'loading' | 'ready' | 'accepting' | 'success' | 'error' | 'expired'>('loading')
+  const [status, setStatus] = useState<'loading' | 'ready' | 'name-capture' | 'accepting' | 'success' | 'error' | 'expired'>('loading')
   const [invite, setInvite] = useState<any>(null)
   const [project, setProject] = useState<any>(null)
   const [error, setError] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [nameError, setNameError] = useState('')
 
   useEffect(() => {
     async function load() {
-      // Look up the invite
       const { data: inv } = await supabase
         .from('project_invites')
         .select('*')
@@ -41,8 +42,6 @@ export default function InvitePage() {
   }, [token])
 
   async function handleAccept() {
-    setStatus('accepting')
-
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -57,6 +56,49 @@ export default function InvitePage() {
       setError(`This invite was sent to ${invite.invited_email}. Please log in with that email address.`)
       return
     }
+
+    // Check if they already have a profile
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .single()
+
+    if (existingProfile) {
+      // Already has profile — skip name capture, accept directly
+      await doAccept()
+    } else {
+      // No profile — show name capture step
+      setStatus('name-capture')
+    }
+  }
+
+  async function handleNameSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setNameError('')
+    if (!fullName.trim()) { setNameError('Please enter your name.'); return }
+
+    setStatus('accepting')
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setStatus('error'); setError('Not authenticated.'); return }
+
+    // Create profile row
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({ id: user.id, full_name: fullName.trim(), role: invite.role })
+
+    if (profileError && profileError.code !== '23505') {
+      setStatus('error')
+      setError(profileError.message)
+      return
+    }
+
+    await doAccept()
+  }
+
+  async function doAccept() {
+    setStatus('accepting')
 
     const res = await fetch('/api/invite/accept', {
       method: 'POST',
@@ -77,7 +119,7 @@ export default function InvitePage() {
   return (
     <div style={styles.page}>
       <div style={styles.box}>
-        <div style={styles.logo}>OWNERUP</div>
+        <div style={styles.logo}>METALOG</div>
 
         {status === 'loading' && (
           <p style={styles.subtitle}>Loading your invitation…</p>
@@ -98,8 +140,35 @@ export default function InvitePage() {
           </>
         )}
 
+        {status === 'name-capture' && (
+          <>
+            <h1 style={styles.heading}>One more thing</h1>
+            <p style={styles.subtitle}>
+              What's your name? This will be visible to other project members.
+            </p>
+            <form onSubmit={handleNameSubmit} style={styles.form}>
+              <div style={styles.field}>
+                <label style={styles.label}>YOUR NAME <span style={styles.required}>*</span></label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  required
+                  autoFocus
+                  style={styles.input}
+                  placeholder="e.g. Sarah Mitchell"
+                />
+              </div>
+              {nameError && <p style={styles.error}>{nameError}</p>}
+              <button type="submit" style={styles.button}>
+                Join project →
+              </button>
+            </form>
+          </>
+        )}
+
         {status === 'accepting' && (
-          <p style={styles.subtitle}>Accepting invitation…</p>
+          <p style={styles.subtitle}>Joining project…</p>
         )}
 
         {status === 'success' && (
@@ -161,6 +230,39 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.7,
     marginBottom: '24px',
   },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+  },
+  field: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  label: {
+    fontSize: '10px',
+    letterSpacing: '0.1em',
+    color: '#888',
+  },
+  required: {
+    color: '#C9B99A',
+  },
+  input: {
+    fontFamily: '"DM Mono", monospace',
+    fontSize: '13px',
+    padding: '10px 12px',
+    border: '1px solid #DDD5C8',
+    backgroundColor: '#FFFFFF',
+    color: '#151412',
+    outline: 'none',
+    borderRadius: '2px',
+  },
+  error: {
+    fontSize: '11px',
+    color: '#c0392b',
+    margin: 0,
+  },
   button: {
     fontFamily: '"DM Mono", monospace',
     fontSize: '11px',
@@ -171,5 +273,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     cursor: 'pointer',
     borderRadius: '2px',
+    marginTop: '8px',
   },
 }

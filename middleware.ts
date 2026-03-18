@@ -62,8 +62,8 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  // Allow onboarding for logged-in users only
-  if (pathname.startsWith('/onboarding')) {
+ // Allow onboarding and profile-setup for logged-in users only
+  if (pathname.startsWith('/onboarding') || pathname.startsWith('/profile-setup')) {
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))
     }

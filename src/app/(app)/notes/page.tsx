@@ -8,6 +8,7 @@ interface Note {
   project_id: string
   body: string
   created_at: string
+  created_by: string | null
 }
 
 export default function NotesPage() {
@@ -20,21 +21,53 @@ export default function NotesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [canEdit, setCanEdit] = useState(false)
   const [hasAnyAccess, setHasAnyAccess] = useState(true)
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({})
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      setCurrentUserId(user.id)
+
       const cookiePid = document.cookie.split('; ').find(r => r.startsWith('selected_project_id='))?.split('=')[1]
       const { data: memberRows } = await supabase
         .from('project_members').select('project_id, role').eq('user_id', user.id).eq('status', 'active')
       if (!memberRows?.length) return
       const pid = cookiePid && memberRows.some(r => r.project_id === cookiePid) ? cookiePid : memberRows[0].project_id
       setProjectId(pid)
-      const { data } = await supabase.from('notes').select('*').eq('project_id', pid).order('created_at', { ascending: false })
+
+      const { data } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('project_id', pid)
+        .order('created_at', { ascending: false })
       setNotes(data ?? [])
+
+      // Fetch current user's profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single()
+      if (profile) setCurrentUserName(profile.full_name)
+
+      // Fetch profiles for all unique created_by IDs in notes
+      const creatorIds = [...new Set((data ?? []).map((n: Note) => n.created_by).filter(Boolean))] as string[]
+      if (creatorIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', creatorIds)
+        const nameMap: Record<string, string> = {}
+        for (const p of profiles ?? []) nameMap[p.id] = p.full_name
+        setProfileNames(nameMap)
+      }
+
       setLoading(false)
+
       const memberRow = memberRows.find(r => r.project_id === pid)
       const role = memberRow?.role ?? 'other'
       if (['owner', 'co-owner'].includes(role)) {
@@ -50,10 +83,22 @@ export default function NotesPage() {
   }, [])
 
   async function handleAdd() {
-    if (!body.trim() || !projectId) return
+    if (!body.trim() || !projectId || !currentUserId) return
     setSaving(true)
-    const { data: newNote, error } = await supabase.from('notes').insert({ project_id: projectId, body: body.trim() }).select().single()
-    if (!error && newNote) { setNotes(prev => [newNote, ...prev]); setBody(''); if (textareaRef.current) textareaRef.current.style.height = 'auto' }
+    const { data: newNote, error } = await supabase
+      .from('notes')
+      .insert({ project_id: projectId, body: body.trim(), created_by: currentUserId })
+      .select()
+      .single()
+    if (!error && newNote) {
+      setNotes(prev => [newNote, ...prev])
+      setBody('')
+      if (textareaRef.current) textareaRef.current.style.height = 'auto'
+      // Add current user to profileNames if not already there
+      if (currentUserId && currentUserName && !profileNames[currentUserId]) {
+        setProfileNames(prev => ({ ...prev, [currentUserId]: currentUserName }))
+      }
+    }
     setSaving(false)
   }
 
@@ -70,11 +115,20 @@ export default function NotesPage() {
   }
 
   function autoResize(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    setBody(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'
+    setBody(e.target.value)
+    e.target.style.height = 'auto'
+    e.target.style.height = e.target.scrollHeight + 'px'
   }
 
   function formatDate(s: string) {
     return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  function noteAttribution(note: Note): string {
+    if (!note.created_by) return formatDate(note.created_at)
+    const name = profileNames[note.created_by]
+    if (name) return `${name} · ${formatDate(note.created_at)}`
+    return formatDate(note.created_at)
   }
 
   if (!loading && !hasAnyAccess) {
@@ -96,10 +150,20 @@ export default function NotesPage() {
 
       {canEdit && (
         <div className="compose">
-          <textarea ref={textareaRef} className="compose-input" placeholder="Write a note…" value={body} onChange={autoResize} onKeyDown={handleKeyDown} rows={3} />
+          <textarea
+            ref={textareaRef}
+            className="compose-input"
+            placeholder="Write a note…"
+            value={body}
+            onChange={autoResize}
+            onKeyDown={handleKeyDown}
+            rows={3}
+          />
           <div className="compose-footer">
             <span className="compose-hint">⌘ + Return to save</span>
-            <button className="save-btn" onClick={handleAdd} disabled={saving || !body.trim()}>{saving ? 'Saving…' : 'Add note'}</button>
+            <button className="save-btn" onClick={handleAdd} disabled={saving || !body.trim()}>
+              {saving ? 'Saving…' : 'Add note'}
+            </button>
           </div>
         </div>
       )}
@@ -114,7 +178,7 @@ export default function NotesPage() {
             <div key={note.id} className="note-row">
               <div className="note-body">{note.body}</div>
               <div className="note-footer">
-                <span className="note-date">{formatDate(note.created_at)}</span>
+                <span className="note-date">{noteAttribution(note)}</span>
                 {canEdit && (
                   <button className="note-delete" onClick={() => handleDelete(note)} disabled={deletingId === note.id}>
                     {deletingId === note.id ? '…' : 'Delete'}

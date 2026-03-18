@@ -166,12 +166,14 @@ export default function RenderingsPage() {
       const { error: uploadError } = await supabase.storage.from('renderings').upload(filename, file)
       if (uploadError) { setError(`Upload failed: ${uploadError.message}`); continue }
       const { data: { publicUrl } } = supabase.storage.from('renderings').getPublicUrl(filename)
+     const { data: { user } } = await supabase.auth.getUser()
       const { data: newRendering, error: dbError } = await supabase.from('renderings').insert({
         project_id: projectId,
         image_url: publicUrl,
         taken_at: new Date(episodeDate + 'T12:00:00').toISOString(),
         uploaded_at: new Date().toISOString(),
         caption: null,
+        uploaded_by: user?.id ?? null,
       }).select().single()
       if (dbError) { setError(`DB error: ${dbError.message}`) }
       else if (newRendering) newRenderings.push(newRendering)
