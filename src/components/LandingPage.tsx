@@ -6,7 +6,7 @@ export default function LandingPage() {
 
       {/* Nav */}
       <nav style={styles.nav}>
-        <span style={styles.logo}>OWNERUP</span>
+        <span style={styles.logo}>METALOG</span>
         <div style={styles.navLinks}>
           <Link href="/login" style={styles.navLink}>Sign in</Link>
           <Link href="/signup" style={styles.navCta}>Get started</Link>
@@ -15,13 +15,13 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section style={styles.hero}>
-        <p style={styles.eyebrow}>FOR HOMEOWNERS BUILDING OR RENOVATING</p>
+        <p style={styles.eyebrow}>FOR ARCHITECTS AND OWNERS BUILDING OR RENOVATING</p>
         <h1 style={styles.headline}>
           Your construction project,<br />organized.
         </h1>
         <p style={styles.subheadline}>
           One place for every drawing, decision, photo, and dollar.<br />
-          Built for owners. Works even if your architect never logs in.
+          Built for architects and owners. Works even if your contractor never logs in.
         </p>
         <Link href="/signup" style={styles.heroCta}>Start for free</Link>
       </section>
@@ -50,7 +50,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer style={styles.footer}>
-        <span style={styles.footerLogo}>OWNERUP</span>
+        <span style={styles.footerLogo}>METALOG</span>
         <span style={styles.footerText}>© 2026</span>
       </footer>
 

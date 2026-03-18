@@ -21,7 +21,6 @@ function SignupPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Pre-fill email if passed in URL (e.g. ?email=foo@bar.com)
   useEffect(() => {
     const emailParam = searchParams.get('email')
     if (emailParam) setEmail(emailParam)
@@ -57,7 +56,6 @@ function SignupPage() {
       return
     }
 
-    // If there's an invite token, accept it now
     if (inviteToken) {
       try {
         const res = await fetch('/api/invite/accept', {
@@ -67,10 +65,8 @@ function SignupPage() {
         })
         const data = await res.json()
         if (!res.ok) {
-          // Don't block the user — they're signed up, just show a warning
           console.error('Invite accept error:', data.error)
         }
-        // Redirect to home — they've been added to the project
         router.push('/home')
       } catch (err) {
         console.error('Failed to accept invite:', err)
@@ -79,7 +75,6 @@ function SignupPage() {
       return
     }
 
-    // No invite — check if user has a project
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const { data: members } = await supabase
@@ -95,7 +90,6 @@ function SignupPage() {
         router.push('/home')
       }
     } else {
-      // Email confirmation is on — show confirmation screen
       setSuccess(true)
     }
     setLoading(false)
@@ -105,7 +99,7 @@ function SignupPage() {
     return (
       <div style={styles.page}>
         <div style={styles.box}>
-          <div style={styles.logo}>OWNERUP</div>
+          <div style={styles.logo}>METALOG</div>
           <p style={styles.confirmTitle}>Check your email</p>
           <p style={styles.confirmBody}>
             We sent a confirmation link to <strong>{email}</strong>.<br />
@@ -120,7 +114,7 @@ function SignupPage() {
   return (
     <div style={styles.page}>
       <div style={styles.box}>
-        <div style={styles.logo}>OWNERUP</div>
+        <div style={styles.logo}>METALOG</div>
         <p style={styles.subtitle}>
           {inviteToken ? 'Create your account to accept your invitation' : 'Create your account'}
         </p>
@@ -271,6 +265,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '24px',
   },
 }
+
 export default function SignupPageWrapper() {
   return <Suspense><SignupPage /></Suspense>
 }

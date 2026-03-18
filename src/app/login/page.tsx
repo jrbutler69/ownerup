@@ -31,7 +31,6 @@ function LoginPage() {
       return
     }
 
-    // If there's an invite token, accept it before redirecting
     if (inviteToken) {
       try {
         await fetch('/api/invite/accept', {
@@ -54,8 +53,8 @@ function LoginPage() {
     <div className="login-root">
       <div className="login-left">
         <div className="brand">
-          <span className="brand-mark">O</span>
-          <span className="brand-name">OwnerUp</span>
+          <span className="brand-mark">M</span>
+          <span className="brand-name">Metalog</span>
         </div>
         <div className="tagline">
           <p>Every decision.</p>
@@ -64,22 +63,17 @@ function LoginPage() {
         </div>
         <div className="floor-plan" aria-hidden="true">
           <svg viewBox="0 0 300 260" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* Outer walls */}
             <rect x="20" y="20" width="260" height="220" stroke="#c9b99a" strokeWidth="3" fill="none"/>
-            {/* Interior walls */}
             <line x1="20" y1="130" x2="160" y2="130" stroke="#c9b99a" strokeWidth="1.5"/>
             <line x1="160" y1="20" x2="160" y2="180" stroke="#c9b99a" strokeWidth="1.5"/>
             <line x1="160" y1="180" x2="280" y2="180" stroke="#c9b99a" strokeWidth="1.5"/>
             <line x1="100" y1="130" x2="100" y2="240" stroke="#c9b99a" strokeWidth="1.5"/>
-            {/* Door arcs */}
             <path d="M160 80 Q185 80 185 55" stroke="#c9b99a" strokeWidth="1" fill="none" strokeDasharray="3,3"/>
             <path d="M100 165 Q125 165 125 140" stroke="#c9b99a" strokeWidth="1" fill="none" strokeDasharray="3,3"/>
-            {/* Room labels */}
             <text x="80" y="80" fill="#c9b99a" fontSize="9" fontFamily="monospace" opacity="0.7" textAnchor="middle">LIVING</text>
             <text x="220" y="100" fill="#c9b99a" fontSize="9" fontFamily="monospace" opacity="0.7" textAnchor="middle">PRIMARY</text>
             <text x="60" y="185" fill="#c9b99a" fontSize="9" fontFamily="monospace" opacity="0.7" textAnchor="middle">KITCHEN</text>
             <text x="220" y="210" fill="#c9b99a" fontSize="9" fontFamily="monospace" opacity="0.7" textAnchor="middle">GARAGE</text>
-            {/* Compass */}
             <text x="265" y="38" fill="#c9b99a" fontSize="10" fontFamily="monospace" opacity="0.5">N</text>
             <line x1="268" y1="40" x2="268" y2="50" stroke="#c9b99a" strokeWidth="1" opacity="0.5"/>
           </svg>
@@ -126,13 +120,10 @@ function LoginPage() {
             {error && <p className="error-msg">{error}</p>}
 
             <button type="submit" disabled={loading} className="submit-btn">
-              {loading ? (
-                <span className="spinner" />
-              ) : (
-                'Sign in'
-              )}
+              {loading ? <span className="spinner" /> : 'Sign in'}
             </button>
           </form>
+
           <p style={{ fontFamily: '"DM Mono", monospace', fontSize: '11px', color: '#888', marginTop: '24px', textAlign: 'center' }}>
             Don't have an account?{' '}
             <a href={inviteToken ? `/signup?invite=${inviteToken}` : '/signup'} style={{ color: '#C9B99A', textDecoration: 'none' }}>Sign up</a>
@@ -143,16 +134,9 @@ function LoginPage() {
       <style jsx>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=DM+Mono:wght@300;400&display=swap');
 
-        :global(body) {
-          margin: 0;
-          padding: 0;
-        }
+        :global(body) { margin: 0; padding: 0; }
 
-        .login-root {
-          display: flex;
-          min-height: 100vh;
-          font-family: 'DM Mono', monospace;
-        }
+        .login-root { display: flex; min-height: 100vh; font-family: 'DM Mono', monospace; }
 
         .login-left {
           flex: 1;
@@ -167,11 +151,7 @@ function LoginPage() {
           overflow: hidden;
         }
 
-        .brand {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
+        .brand { display: flex; align-items: center; gap: 12px; }
 
         .brand-mark {
           width: 36px;
@@ -195,10 +175,7 @@ function LoginPage() {
           text-transform: uppercase;
         }
 
-        .tagline {
-          margin-top: auto;
-          margin-bottom: 48px;
-        }
+        .tagline { margin-top: auto; margin-bottom: 48px; }
 
         .tagline p {
           font-family: 'Cormorant Garamond', serif;
@@ -210,13 +187,7 @@ function LoginPage() {
           letter-spacing: -0.01em;
         }
 
-        .floor-plan {
-          position: absolute;
-          bottom: -20px;
-          right: -20px;
-          width: 280px;
-          opacity: 0.35;
-        }
+        .floor-plan { position: absolute; bottom: -20px; right: -20px; width: 280px; opacity: 0.35; }
 
         .login-right {
           width: 480px;
@@ -227,10 +198,7 @@ function LoginPage() {
           padding: 48px;
         }
 
-        .form-container {
-          width: 100%;
-          max-width: 340px;
-        }
+        .form-container { width: 100%; max-width: 340px; }
 
         h1 {
           font-family: 'Cormorant Garamond', serif;
@@ -250,9 +218,7 @@ function LoginPage() {
           text-transform: uppercase;
         }
 
-        .field {
-          margin-bottom: 24px;
-        }
+        .field { margin-bottom: 24px; }
 
         label {
           display: block;
@@ -278,13 +244,8 @@ function LoginPage() {
           transition: border-color 0.15s;
         }
 
-        input:focus {
-          border-color: #8b6f47;
-        }
-
-        input::placeholder {
-          color: #c5bbb0;
-        }
+        input:focus { border-color: #8b6f47; }
+        input::placeholder { color: #c5bbb0; }
 
         .error-msg {
           font-size: 11px;
@@ -315,14 +276,8 @@ function LoginPage() {
           min-height: 48px;
         }
 
-        .submit-btn:hover:not(:disabled) {
-          background: #2e2a24;
-        }
-
-        .submit-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
+        .submit-btn:hover:not(:disabled) { background: #2e2a24; }
+        .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .spinner {
           width: 16px;
@@ -333,9 +288,7 @@ function LoginPage() {
           animation: spin 0.7s linear infinite;
         }
 
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         @media (max-width: 768px) {
           .login-left { display: none; }
