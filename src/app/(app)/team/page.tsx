@@ -134,11 +134,11 @@ export default function TeamPage() {
     setLoading(false)
   }
 
-  function memberDisplayName(member: Member): string {
+ function memberDisplayName(member: Member): string {
     if (member.user_id && profileNames[member.user_id]) {
       return profileNames[member.user_id]
     }
-    return member.invited_email
+    return member.invited_email ?? 'Project Owner'
   }
 
   function setInvitePermission(section: string, level: AccessLevel) {
