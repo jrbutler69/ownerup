@@ -75,10 +75,10 @@ export default function TeamPage() {
   const [isOwner, setIsOwner] = useState(false)
   const [hasAnyAccess, setHasAnyAccess] = useState(true)
   const [members, setMembers] = useState<Member[]>([])
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
 
-  // Invite form state
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('contractor')
   const [invitePermissions, setInvitePermissions] = useState<Permissions>(defaultPermsForRole('contractor'))
@@ -86,15 +86,12 @@ export default function TeamPage() {
   const [inviteError, setInviteError] = useState('')
   const [inviteSuccess, setInviteSuccess] = useState('')
 
-  // Edit permissions state
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null)
   const [editPermissions, setEditPermissions] = useState<Permissions>(emptyPerms())
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState('')
 
-  useEffect(() => {
-    load()
-  }, [])
+  useEffect(() => { load() }, [])
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -123,7 +120,25 @@ export default function TeamPage() {
     const { data: allMembers } = await supabase
       .from('project_members').select('*').eq('project_id', memberRow.project_id).order('created_at')
     setMembers(allMembers ?? [])
+
+    // Fetch profile names for all members who have a user_id
+    const userIds = (allMembers ?? []).map((m: Member) => m.user_id).filter(Boolean) as string[]
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles').select('id, full_name').in('id', userIds)
+      const nameMap: Record<string, string> = {}
+      for (const p of profiles ?? []) nameMap[p.id] = p.full_name
+      setProfileNames(nameMap)
+    }
+
     setLoading(false)
+  }
+
+  function memberDisplayName(member: Member): string {
+    if (member.user_id && profileNames[member.user_id]) {
+      return profileNames[member.user_id]
+    }
+    return member.invited_email
   }
 
   function setInvitePermission(section: string, level: AccessLevel) {
@@ -161,13 +176,9 @@ export default function TeamPage() {
   async function startEditPermissions(member: Member) {
     if (!projectId) return
     setEditError('')
-
     const { data: perms } = await supabase
-      .from('project_permissions')
-      .select('section, access_level')
-      .eq('project_id', projectId)
-      .eq('invited_email', member.invited_email)
-
+      .from('project_permissions').select('section, access_level')
+      .eq('project_id', projectId).eq('invited_email', member.invited_email)
     const loaded = emptyPerms()
     if (perms) {
       for (const p of perms) {
@@ -185,7 +196,6 @@ export default function TeamPage() {
   async function saveEditPermissions(member: Member) {
     if (!projectId) return
     setEditLoading(true); setEditError('')
-
     const upserts = SECTIONS.map(s => ({
       project_id: projectId,
       invited_email: member.invited_email,
@@ -193,11 +203,8 @@ export default function TeamPage() {
       section: s.key,
       access_level: editPermissions[s.key],
     }))
-
     const { error } = await supabase
-      .from('project_permissions')
-      .upsert(upserts, { onConflict: 'project_id,invited_email,section' })
-
+      .from('project_permissions').upsert(upserts, { onConflict: 'project_id,invited_email,section' })
     if (error) {
       setEditError('Failed to save. Please try again.')
     } else {
@@ -256,6 +263,7 @@ export default function TeamPage() {
         .perm-row:last-child { border-bottom: none; }
         .perm-row:nth-child(even) { background: #FAFAF8; }
         .perm-label { font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4540; }
+        .member-email { font-family: 'DM Mono', monospace; font-size: 10px; color: #B0A89E; margin-top: 2px; }
       `}</style>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
@@ -348,8 +356,11 @@ export default function TeamPage() {
               <div className="member-header">
                 <div>
                   <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#1C1A17', marginBottom: 2 }}>
-                    {member.invited_email}
+                    {memberDisplayName(member)}
                   </div>
+                  {member.user_id && profileNames[member.user_id] && (
+                    <div className="member-email">{member.invited_email}</div>
+                  )}
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#9A8F82', letterSpacing: '0.08em' }}>
                     {member.role} · {statusLabel[member.status] ?? member.status}
                   </div>
