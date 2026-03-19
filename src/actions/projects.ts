@@ -97,6 +97,7 @@ export async function createProject(formData: FormData) {
       project_id: project.id,
       user_id: user.id,
       role: 'admin',
+      profession: formData.get('role') as string || 'other',
       status: 'active',
     })
 
