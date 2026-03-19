@@ -21,7 +21,7 @@ const SECTIONS = [
   { key: 'team', label: 'Team' },
 ]
 
-const ROLES = ['co-owner', 'architect', 'designer', 'engineer', 'contractor', 'client', 'other']
+const ROLES = ['co-admin', 'architect', 'designer', 'engineer', 'contractor', 'client', 'other']
 
 type AccessLevel = 'none' | 'view' | 'edit'
 type Permissions = Record<string, AccessLevel>
@@ -31,6 +31,7 @@ interface Member {
   user_id: string | null
   invited_email: string
   role: string
+  profession: string | null
   status: string
   created_at: string
 }
@@ -44,7 +45,7 @@ function allEditPerms(): Permissions {
 }
 
 function defaultPermsForRole(role: string): Permissions {
-  if (role === 'co-owner') return allEditPerms()
+  if (role === 'co-admin') return allEditPerms()
   const p = emptyPerms()
   if (role === 'architect') {
     SECTIONS.forEach(s => { p[s.key] = 'edit' })
@@ -106,7 +107,7 @@ export default function TeamPage() {
 
     setProjectId(memberRow.project_id)
     const role = memberRow.role
-    const ownerOrCo = role === 'owner' || role === 'co-owner'
+    const ownerOrCo = role === 'admin' || role === 'co-admin'
     setIsOwner(ownerOrCo)
 
     if (ownerOrCo) {
@@ -121,7 +122,6 @@ export default function TeamPage() {
       .from('project_members').select('*').eq('project_id', memberRow.project_id).order('created_at')
     setMembers(allMembers ?? [])
 
-    // Fetch profile names for all members who have a user_id
     const userIds = (allMembers ?? []).map((m: Member) => m.user_id).filter(Boolean) as string[]
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
@@ -134,11 +134,15 @@ export default function TeamPage() {
     setLoading(false)
   }
 
- function memberDisplayName(member: Member): string {
+  function memberDisplayName(member: Member): string {
     if (member.user_id && profileNames[member.user_id]) {
       return profileNames[member.user_id]
     }
     return member.invited_email ?? 'Project Owner'
+  }
+
+  function memberDisplayRole(member: Member): string {
+    return member.profession ?? member.role
   }
 
   function setInvitePermission(section: string, level: AccessLevel) {
@@ -227,7 +231,7 @@ export default function TeamPage() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
         <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 300, color: '#1C1A17', margin: '0 0 12px' }}>No access</h1>
         <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', letterSpacing: '0.08em', margin: 0 }}>
-          You don't have access to this section. Contact the project owner if you need access.
+          You don't have access to this section. Contact the project admin if you need access.
         </p>
       </div>
     )
@@ -297,14 +301,14 @@ export default function TeamPage() {
             <div>
               <label className="field-label">Role</label>
               <select className="role-select" value={inviteRole} onChange={e => handleRoleChange(e.target.value)}>
-                {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                {ROLES.map(r => <option key={r} value={r}>{r === 'co-admin' ? 'Co-admin' : r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
               </select>
             </div>
           </div>
 
-          {inviteRole === 'co-owner' ? (
+          {inviteRole === 'co-admin' ? (
             <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#6B8C6B', marginBottom: 24, padding: '10px 16px', background: '#F0F5F0', borderRadius: 3 }}>
-              Co-owners have full access to all sections.
+              Co-admins have full access to all sections.
             </div>
           ) : (
             <div style={{ marginBottom: 24 }}>
@@ -362,12 +366,12 @@ export default function TeamPage() {
                     <div className="member-email">{member.invited_email}</div>
                   )}
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#9A8F82', letterSpacing: '0.08em' }}>
-                    {member.role} · {statusLabel[member.status] ?? member.status}
+                    {memberDisplayRole(member)} · {statusLabel[member.status] ?? member.status}
                   </div>
                 </div>
-                {isOwner && member.role !== 'owner' && (
+                {isOwner && member.role !== 'admin' && (
                   <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                    {member.role !== 'co-owner' && (
+                    {member.role !== 'co-admin' && (
                       <button
                         className="btn-link"
                         onClick={() => editingMemberId === member.id ? setEditingMemberId(null) : startEditPermissions(member)}

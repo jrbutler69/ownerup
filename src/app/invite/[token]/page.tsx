@@ -85,9 +85,8 @@ export default function InvitePage() {
 
     // Create profile row
     const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({ id: user.id, full_name: fullName.trim(), role: invite.role })
-
+        .from('profiles')
+        .insert({ id: user.id, full_name: fullName.trim(), role: invite.profession ?? invite.role })
     if (profileError && profileError.code !== '23505') {
       setStatus('error')
       setError(profileError.message)
@@ -129,7 +128,7 @@ export default function InvitePage() {
           <>
             <h1 style={styles.heading}>You've been invited</h1>
             <p style={styles.subtitle}>
-              You've been invited to join <strong>{project?.name}</strong> as a <strong>{invite.role}</strong>.
+              You've been invited to join <strong>{project?.name}</strong> as a <strong>{invite.profession ?? invite.role}</strong>.
             </p>
             {project?.address && (
               <p style={{ ...styles.subtitle, marginBottom: 32 }}>{project.address}</p>

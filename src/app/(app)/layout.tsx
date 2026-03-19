@@ -55,7 +55,7 @@ export default async function AppLayout({
   const userRole = memberRow?.role ?? 'other'
 
   let permissions: Record<string, string> = {}
-  if (!['owner', 'co-owner'].includes(userRole)) {
+  if (!['admin', 'co-admin'].includes(userRole)) {
     const { data: permRows } = await supabase
       .rpc('get_my_permissions', { p_project_id: project?.id })
     for (const row of permRows ?? []) {

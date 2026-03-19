@@ -23,7 +23,7 @@ export default function HomeClient({ project, members, permissions, data, projec
   const [deleting, setDeleting] = useState(false)
   const router = useRouter()
 
-  const isOwner = userRole === 'owner'
+  const isOwner = userRole === 'admin'
 
   const allEmpty =
     data.documents.length === 0 &&

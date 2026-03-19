@@ -96,7 +96,7 @@ export async function createProject(formData: FormData) {
     .insert({
       project_id: project.id,
       user_id: user.id,
-      role: 'owner',
+      role: 'admin',
       status: 'active',
     })
 
@@ -137,7 +137,7 @@ export async function deleteProject(projectId: string) {
     .eq('user_id', user.id)
     .single()
 
-  if (member?.role !== 'owner') throw new Error('Only the owner can delete a project')
+  if (member?.role !== 'admin') throw new Error('Only the admin can delete a project')
 
   const adminClient = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       .eq('status', 'active')
       .single()
 
-    if (!memberCheck || !['owner', 'co-owner'].includes(memberCheck.role)) {
+    if (!memberCheck || !['admin', 'co-admin'].includes(memberCheck.role)) {
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     }
 
@@ -65,7 +65,8 @@ export async function POST(request: NextRequest) {
       .insert({
         project_id: projectId,
         invited_email: email,
-        role,
+        role: 'member',
+        profession: role,
         invited_by: user.id,
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         status: 'pending',
@@ -80,7 +81,8 @@ export async function POST(request: NextRequest) {
       .insert({
         project_id: projectId,
         invited_email: email,
-        role,
+        role: 'member',
+        profession: role,
         status: 'invited',
       })
 
