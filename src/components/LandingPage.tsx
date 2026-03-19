@@ -15,36 +15,65 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section style={styles.hero}>
-        <p style={styles.eyebrow}>FOR ARCHITECTS AND OWNERS BUILDING OR RENOVATING</p>
+        <p style={styles.eyebrow}>FOR ARCHITECTS, DESIGNERS, AND THEIR CLIENTS</p>
         <h1 style={styles.headline}>
-          Your construction project,<br />organized.
+          A live project dashboard<br />for every client.
         </h1>
         <p style={styles.subheadline}>
-          One place for every drawing, decision, photo, and dollar.<br />
-          Built for architects and owners. Works even if your contractor never logs in.
+          Metalog gives your clients one place to follow the project —<br />
+          drawings, photos, decisions, and renderings, always up to date.<br />
+          You control what they see.
         </p>
-        <Link href="/signup" style={styles.heroCta}>Start for free</Link>
+        <Link href="/signup" style={styles.heroCta}>Create your first project</Link>
+      </section>
+
+      <div style={styles.divider} />
+
+      {/* How it works */}
+      <section style={styles.howItWorks}>
+        <p style={styles.sectionLabel}>HOW IT WORKS</p>
+        <div style={styles.steps}>
+          {steps.map((s, i) => (
+            <div key={i} style={styles.step}>
+              <p style={styles.stepNumber}>{s.number}</p>
+              <p style={styles.stepTitle}>{s.title}</p>
+              <p style={styles.stepBody}>{s.body}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <div style={styles.divider} />
 
       {/* Features */}
       <section style={styles.features}>
-        {features.map((f, i) => (
-          <div key={i} style={styles.feature}>
-            <p style={styles.featureLabel}>{f.label}</p>
-            <p style={styles.featureTitle}>{f.title}</p>
-            <p style={styles.featureBody}>{f.body}</p>
-          </div>
-        ))}
+        <p style={styles.sectionLabel}>WHAT'S INSIDE</p>
+        <div style={styles.featureGrid}>
+          {features.map((f, i) => (
+            <div key={i} style={styles.feature}>
+              <p style={styles.featureLabel}>{f.label}</p>
+              <p style={styles.featureTitle}>{f.title}</p>
+              <p style={styles.featureBody}>{f.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div style={styles.divider} />
+
+      {/* Trust line */}
+      <section style={styles.trust}>
+        <p style={styles.trustText}>
+          Works even if your contractor never logs in. No per-seat pricing. No complexity.
+        </p>
       </section>
 
       <div style={styles.divider} />
 
       {/* Bottom CTA */}
       <section style={styles.bottom}>
-        <h2 style={styles.bottomHeadline}>Ready to get organized?</h2>
-        <p style={styles.bottomBody}>Create your free account in 30 seconds.</p>
+        <h2 style={styles.bottomHeadline}>Start your first project today.</h2>
+        <p style={styles.bottomBody}>Free to use. Takes 60 seconds to set up.</p>
         <Link href="/signup" style={styles.heroCta}>Create your account</Link>
       </section>
 
@@ -58,26 +87,44 @@ export default function LandingPage() {
   )
 }
 
+const steps = [
+  {
+    number: '01',
+    title: 'Create a project.',
+    body: 'Add the project name, address, and your team. Takes 60 seconds.',
+  },
+  {
+    number: '02',
+    title: 'Upload as you go.',
+    body: 'Drop in drawings, photos, and renderings as the project progresses.',
+  },
+  {
+    number: '03',
+    title: 'Invite your client.',
+    body: 'They get a clean, read-only view of everything you\'ve shared. No training required.',
+  },
+]
+
 const features = [
   {
     label: '01',
-    title: 'Every document, versioned.',
-    body: 'Upload contracts, drawings, permits, and specs. Always know which version is current.',
+    title: 'Drawings, always current.',
+    body: 'Upload new versions of any document. The latest is always front and center.',
   },
   {
     label: '02',
-    title: 'Photos by site visit.',
-    body: 'Document progress with photos grouped by week and visit. Lightbox viewer included.',
+    title: 'Site photos by visit.',
+    body: 'Document progress with photos grouped by episode. Clients can follow along in real time.',
   },
   {
     label: '03',
-    title: 'Decisions, logged.',
-    body: 'Record what was decided, when, and what it cost. Never wonder why something changed.',
+    title: 'Renderings, in context.',
+    body: 'A dedicated space for architectural renderings, separate from site photography.',
   },
   {
     label: '04',
-    title: 'Your team, in one place.',
-    body: 'Architects, contractors, engineers, vendors — all their contact info, organized by role.',
+    title: 'Granular permissions.',
+    body: 'Control exactly what each person can see and edit. Clients see what you share. Nothing more.',
   },
 ]
 
@@ -123,7 +170,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   hero: {
     padding: '120px 64px 100px',
-    maxWidth: '800px',
+    maxWidth: '860px',
   },
   eyebrow: {
     fontSize: '10px',
@@ -142,7 +189,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   subheadline: {
     fontSize: '13px',
-    lineHeight: 1.8,
+    lineHeight: 1.9,
     color: '#666',
     margin: '0 0 40px 0',
   },
@@ -160,16 +207,54 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: '1px solid #E0D9D0',
     margin: '0 64px',
   },
-  features: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: '0',
+  sectionLabel: {
+    fontSize: '10px',
+    letterSpacing: '0.15em',
+    color: '#C9B99A',
+    marginBottom: '48px',
+  },
+  howItWorks: {
     padding: '80px 64px',
   },
+  steps: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '64px',
+  },
+  step: {
+    borderTop: '1px solid #E0D9D0',
+    paddingTop: '24px',
+  },
+  stepNumber: {
+    fontSize: '10px',
+    letterSpacing: '0.1em',
+    color: '#C9B99A',
+    marginBottom: '16px',
+  },
+  stepTitle: {
+    fontFamily: '"Cormorant Garamond", serif',
+    fontSize: '22px',
+    color: '#151412',
+    margin: '0 0 12px 0',
+    lineHeight: 1.3,
+  },
+  stepBody: {
+    fontSize: '11px',
+    lineHeight: 1.8,
+    color: '#888',
+    margin: 0,
+  },
+  features: {
+    padding: '80px 64px',
+  },
+  featureGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '40px',
+  },
   feature: {
-    padding: '0 40px 0 0',
-    borderRight: '1px solid #E0D9D0',
-    marginRight: '40px',
+    borderTop: '1px solid #E0D9D0',
+    paddingTop: '24px',
   },
   featureLabel: {
     fontSize: '10px',
@@ -189,6 +274,19 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.8,
     color: '#888',
     margin: 0,
+  },
+  trust: {
+    padding: '64px 64px',
+  },
+  trustText: {
+    fontFamily: '"Cormorant Garamond", serif',
+    fontSize: '28px',
+    fontWeight: 300,
+    fontStyle: 'italic',
+    color: '#7A7468',
+    margin: 0,
+    lineHeight: 1.6,
+    maxWidth: '640px',
   },
   bottom: {
     padding: '100px 64px',
