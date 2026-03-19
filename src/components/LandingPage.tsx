@@ -27,6 +27,17 @@ export default function LandingPage() {
         <Link href="/signup" style={styles.heroCta}>Create your first project</Link>
       </section>
 
+      {/* Screenshot */}
+      <section style={styles.screenshotSection}>
+        <div style={styles.screenshotFrame}>
+          <img
+            src="/screenshot.png"
+            alt="Metalog project dashboard"
+            style={styles.screenshot}
+          />
+        </div>
+      </section>
+
       <div style={styles.divider} />
 
       {/* How it works */}
@@ -169,7 +180,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '2px',
   },
   hero: {
-    padding: '120px 64px 100px',
+    padding: '120px 64px 80px',
     maxWidth: '860px',
   },
   eyebrow: {
@@ -202,6 +213,19 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '14px 32px',
     textDecoration: 'none',
     borderRadius: '2px',
+  },
+  screenshotSection: {
+    padding: '0 64px 80px',
+  },
+  screenshotFrame: {
+    border: '1px solid #D8D2C8',
+    borderRadius: '4px',
+    overflow: 'hidden',
+    boxShadow: '0 8px 40px rgba(0,0,0,0.08)',
+  },
+  screenshot: {
+    width: '100%',
+    display: 'block',
   },
   divider: {
     borderTop: '1px solid #E0D9D0',
