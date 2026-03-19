@@ -4,6 +4,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { deleteProject } from '@/actions/projects'
 
+const emptyStyle: React.CSSProperties = {
+  fontFamily: "'DM Mono', monospace",
+  fontSize: '12px',
+  fontWeight: 300,
+  color: '#C0B8AE',
+  margin: 0,
+  letterSpacing: '0.05em',
+}
+
 export default function HomeClient({ project, members, permissions, data, projectId, userRole }: {
   project: any
   members: any[]
@@ -129,12 +138,12 @@ function OverviewContent({ data, router, permissions, project, members, allEmpty
     contentTiles.push({
       id: 'documents',
       el: (
-        <div className="section">
+        <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
             <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Documents</span>
             <button style={{ background: "none", border: "none", fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#B0A898", cursor: "pointer", padding: "0", flexShrink: 0, whiteSpace: "nowrap" as const }} onClick={() => router.push('/documents')}>View all →</button>
           </div>
-          {data.documents.length === 0 ? <p className="empty-state">No documents yet</p>
+          {data.documents.length === 0 ? <p style={emptyStyle}>No documents yet</p>
             : data.documents.map((doc: any) => (
               <a key={doc.id} href={doc.file_url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #F0EBE4", gap: "16px", textDecoration: "none", color: "inherit" }}>
                 <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "17px", fontWeight: 400, color: "#1A1814", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{doc.title}</span>
@@ -150,12 +159,12 @@ function OverviewContent({ data, router, permissions, project, members, allEmpty
     contentTiles.push({
       id: 'photos',
       el: (
-        <div className="section">
+        <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
             <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Recent Photos</span>
             <button style={{ background: "none", border: "none", fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#B0A898", cursor: "pointer", padding: "0", flexShrink: 0, whiteSpace: "nowrap" as const }} onClick={() => router.push('/photos')}>View all →</button>
           </div>
-          {data.photos.length === 0 ? <p className="empty-state">No photos yet</p>
+          {data.photos.length === 0 ? <p style={emptyStyle}>No photos yet</p>
             : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
                 {data.photos.map((photo: any) => (
@@ -174,12 +183,12 @@ function OverviewContent({ data, router, permissions, project, members, allEmpty
     contentTiles.push({
       id: 'notes',
       el: (
-        <div className="section">
+        <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
             <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Notes</span>
             <button style={{ background: "none", border: "none", fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#B0A898", cursor: "pointer", padding: "0", flexShrink: 0, whiteSpace: "nowrap" as const }} onClick={() => router.push('/notes')}>View all →</button>
           </div>
-          {data.notes.length === 0 ? <p className="empty-state">No notes yet</p>
+          {data.notes.length === 0 ? <p style={emptyStyle}>No notes yet</p>
             : data.notes.map((note: any) => (
               <div key={note.id} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #F0EBE4", gap: "16px" }}>
                 <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "17px", fontWeight: 400, color: "#1A1814", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{note.body}</span>
@@ -195,12 +204,12 @@ function OverviewContent({ data, router, permissions, project, members, allEmpty
     contentTiles.push({
       id: 'renderings',
       el: (
-        <div className="section">
+        <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
             <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Recent Renderings</span>
             <button style={{ background: "none", border: "none", fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#B0A898", cursor: "pointer", padding: "0", flexShrink: 0, whiteSpace: "nowrap" as const }} onClick={() => router.push('/renderings')}>View all →</button>
           </div>
-          {data.renderings.length === 0 ? <p className="empty-state">No renderings yet</p>
+          {data.renderings.length === 0 ? <p style={emptyStyle}>No renderings yet</p>
             : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
                 {data.renderings.map((r: any) => (
@@ -219,7 +228,7 @@ function OverviewContent({ data, router, permissions, project, members, allEmpty
     {
       id: 'project-info',
       el: (
-        <div className="section">
+        <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
             <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Project</span>
           </div>
@@ -243,12 +252,12 @@ function OverviewContent({ data, router, permissions, project, members, allEmpty
     {
       id: 'team',
       el: (
-        <div className="section">
+        <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
             <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase" as const, color: "#7A7468", fontWeight: 400 }}>Team</span>
             <button style={{ background: "none", border: "none", fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#B0A898", cursor: "pointer", padding: "0", flexShrink: 0, whiteSpace: "nowrap" as const }} onClick={() => router.push('/team')}>View all →</button>
           </div>
-          {members.length === 0 ? <p className="empty-state">No team members yet</p>
+          {members.length === 0 ? <p style={emptyStyle}>No team members yet</p>
             : members.slice(0, 4).map((m: any, i: number) => (
               <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F0EBE4', gap: '16px' }}>
                 <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '17px', fontWeight: 400, color: '#1A1814', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.invited_email}</span>
@@ -269,32 +278,13 @@ function OverviewContent({ data, router, permissions, project, members, allEmpty
   const [tl, tr, bl, br] = allTiles
 
   return (
-    <div className="overview">
+    <div style={{ animation: 'fadeUp 0.3s ease' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
         <div style={{ padding: '32px 48px 32px 0', borderRight: '1px solid #E8E3DC', borderBottom: '1px solid #E8E3DC' }}>{tl?.el}</div>
         <div style={{ padding: '32px 0 32px 48px', borderBottom: '1px solid #E8E3DC' }}>{tr?.el}</div>
         <div style={{ padding: '32px 48px 32px 0', borderRight: '1px solid #E8E3DC' }}>{bl?.el}</div>
         <div style={{ padding: '32px 0 32px 48px' }}>{br?.el}</div>
       </div>
-
-      <style jsx>{`
-        .overview { animation: fadeUp 0.3s ease; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .empty-state { font-family: 'DM Mono', monospace; font-size: 12px; font-style: normal; font-weight: 300; color: #C0B8AE; margin: 0; letter-spacing: 0.05em; }
-        .row {
-          display: flex; align-items: baseline; justify-content: space-between;
-          padding: 10px 0; border-bottom: 1px solid #F0EBE4; gap: 16px;
-          text-decoration: none; color: inherit;
-        }
-        .row:last-child { border-bottom: none; }
-        .row-name { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 400; color: #1A1814; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        a.row:hover .row-name { color: #8B6F4E; }
-        .row-meta { font-size: 9px; letter-spacing: 0.08em; color: #B0A898; white-space: nowrap; flex-shrink: 0; }
-        .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; }
-        .photo-thumb { aspect-ratio: 1; overflow: hidden; background: #E8E3DC; cursor: pointer; min-width: 0; }
-        .photo-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
-        .photo-thumb:hover img { transform: scale(1.04); }
-      `}</style>
     </div>
   )
 }
@@ -328,7 +318,7 @@ function TimelineContent({ items, permissions }: { items: any[]; permissions: Re
   return (
     <div className="timeline">
       {filtered.length === 0 ? (
-        <p className="empty">No activity yet — start by uploading a document or photo.</p>
+        <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '17px', fontStyle: 'italic', fontWeight: 300, color: '#C0B8AE' }}>No activity yet — start by uploading a document or photo.</p>
       ) : (
         <div className="feed">
           {filtered.map((item: any, i: number) => {
@@ -360,7 +350,6 @@ function TimelineContent({ items, permissions }: { items: any[]; permissions: Re
       <style jsx>{`
         .timeline { animation: fadeUp 0.3s ease; }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .empty { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-style: italic; font-weight: 300; color: #C0B8AE; }
         .feed { display: flex; flex-direction: column; max-width: 640px; }
         .feed-item { display: flex; gap: 20px; }
         .feed-line { display: flex; flex-direction: column; align-items: center; width: 14px; flex-shrink: 0; padding-top: 5px; }
