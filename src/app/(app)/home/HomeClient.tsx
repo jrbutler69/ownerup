@@ -280,7 +280,7 @@ function OverviewContent({ data, router, permissions, project, members, allEmpty
       <style jsx>{`
         .overview { animation: fadeUp 0.3s ease; }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .empty-state { font-family: 'Cormorant Garamond', serif; font-size: 15px; font-style: italic; font-weight: 300; color: #C0B8AE; margin: 0; }
+        .empty-state { font-family: 'DM Mono', monospace; font-size: 12px; font-style: normal; font-weight: 300; color: #C0B8AE; margin: 0; letter-spacing: 0.05em; }
         .row {
           display: flex; align-items: baseline; justify-content: space-between;
           padding: 10px 0; border-bottom: 1px solid #F0EBE4; gap: 16px;
