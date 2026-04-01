@@ -6,6 +6,7 @@ import type { NextRequest } from 'next/server'
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
+  const type = requestUrl.searchParams.get('type')
 
   if (code) {
     const cookieStore = await cookies()
@@ -29,6 +30,11 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
+      // Password reset flow → send to update-password page
+      if (type === 'recovery') {
+        return NextResponse.redirect(new URL('/update-password', requestUrl.origin))
+      }
+
       // Check if this user already has a project
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {

@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     const inviteUrl = `https://metalog.app/invite/${invite.token}`
 
     await resend.emails.send({
-      from: 'Metalog <noreply@ownerup.app>',
+      from: 'Metalog <noreply@metalog.app>',
       to: email,
       subject: `You've been invited to ${project?.name ?? 'a project'} on Metalog`,
       html: `
