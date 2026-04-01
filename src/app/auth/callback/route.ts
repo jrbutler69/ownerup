@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     if (!error) {
       // Check type from URL or check the session for recovery
       if (type === 'recovery') {
-        return NextResponse.redirect(new URL('/update-password', requestUrl.origin))
+        return NextResponse.redirect(new URL('https://metalog.app/update-password'))
       }
 
       const { data: { user } } = await supabase.auth.getUser()
