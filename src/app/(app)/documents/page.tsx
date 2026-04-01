@@ -43,6 +43,8 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [profileNames, setProfileNames] = useState<Record<string, string>>({})
+  const [renamingDoc, setRenamingDoc] = useState<Document | null>(null)
+  const [renameTitle, setRenameTitle] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -89,7 +91,6 @@ export default function DocumentsPage() {
         .order('upload_date', { ascending: false })
       setDocuments(docs ?? [])
 
-      // Fetch profiles for all uploaders
       const uploaderIds = [...new Set((docs ?? []).map((d: Document) => d.uploaded_by).filter(Boolean))] as string[]
       if (uploaderIds.length > 0) {
         const { data: profiles } = await supabase
@@ -158,7 +159,6 @@ export default function DocumentsPage() {
       if (dbError) { setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: JSON.stringify(dbError) } : f)); continue }
       if (newDoc) {
         newDocs.push(newDoc)
-        // Add uploader to profileNames if not already there
         if (user?.id && !profileNames[user.id]) {
           const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
           if (profile) setProfileNames(prev => ({ ...prev, [user.id]: profile.full_name }))
@@ -179,6 +179,21 @@ export default function DocumentsPage() {
     await supabase.from('documents').delete().eq('id', doc.id)
     setDocuments(prev => prev.filter(d => d.id !== doc.id))
     setDeletingId(null)
+  }
+
+  async function handleRename() {
+    if (!renamingDoc || !renameTitle.trim()) return
+    const { data } = await supabase
+      .from('documents')
+      .update({ title: renameTitle.trim() })
+      .eq('id', renamingDoc.id)
+      .select()
+      .single()
+    if (data) {
+      setDocuments(prev => prev.map(d => d.id === data.id ? data : d))
+      setRenamingDoc(null)
+      setRenameTitle('')
+    }
   }
 
   const filtered = activeCategory === 'All' ? documents : documents.filter(d => d.category === activeCategory)
@@ -270,15 +285,42 @@ export default function DocumentsPage() {
                       <span className="doc-arrow">→</span>
                     </a>
                     {canEditCategory(doc.category) && (
-                      <button className="doc-delete" onClick={() => handleDelete(doc)} disabled={deletingId === doc.id} title="Delete document">
-                        {deletingId === doc.id ? '…' : '✕'}
-                      </button>
+                      <div className="doc-actions">
+                        <button className="doc-rename" onClick={() => { setRenamingDoc(doc); setRenameTitle(doc.title) }} title="Rename document">✎</button>
+                        <button className="doc-delete" onClick={() => handleDelete(doc)} disabled={deletingId === doc.id} title="Delete document">
+                          {deletingId === doc.id ? '…' : '✕'}
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Rename modal */}
+      {renamingDoc && (
+        <div className="modal-overlay" onClick={() => setRenamingDoc(null)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">Rename Document</h2>
+              <button className="modal-close" onClick={() => setRenamingDoc(null)}>✕</button>
+            </div>
+            <input
+              type="text"
+              value={renameTitle}
+              onChange={e => setRenameTitle(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleRename()}
+              autoFocus
+              style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: '2px', fontFamily: 'DM Mono, monospace', fontSize: '12px', color: '#1c1a17', outline: 'none', marginBottom: '24px' }}
+            />
+            <div className="modal-actions">
+              <button className="cancel-btn" onClick={() => setRenamingDoc(null)}>Cancel</button>
+              <button className="submit-btn" onClick={handleRename}>Save</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -371,8 +413,11 @@ export default function DocumentsPage() {
         .doc-row-wrapper { display: flex; align-items: center; gap: 4px; }
         .doc-row { flex: 1; display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #fff; border: 1px solid #e8e0d5; border-radius: 2px; text-decoration: none; color: inherit; transition: all 0.15s; }
         .doc-row:hover { border-color: #c9b99a; background: #faf8f5; }
-        .doc-delete { opacity: 0; background: none; border: none; color: #c0532a; font-size: 11px; cursor: pointer; padding: 6px 8px; transition: opacity 0.15s; font-family: 'DM Mono', monospace; }
-        .doc-row-wrapper:hover .doc-delete { opacity: 1; }
+        .doc-actions { display: flex; align-items: center; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+        .doc-row-wrapper:hover .doc-actions { opacity: 1; }
+        .doc-rename { background: none; border: none; color: #9a8e7e; font-size: 13px; cursor: pointer; padding: 6px 8px; font-family: 'DM Mono', monospace; }
+        .doc-rename:hover { color: #1c1a17; }
+        .doc-delete { background: none; border: none; color: #c0532a; font-size: 11px; cursor: pointer; padding: 6px 8px; font-family: 'DM Mono', monospace; }
         .doc-delete:hover { color: #a03010; }
         .doc-icon { font-size: 12px; color: #9a8e7e; flex-shrink: 0; }
         .doc-title-col { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
