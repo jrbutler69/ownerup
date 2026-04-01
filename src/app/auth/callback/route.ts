@@ -30,12 +30,17 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // Password reset flow → send to update-password page
+      // Check type from URL or check the session for recovery
       if (type === 'recovery') {
         return NextResponse.redirect(new URL('/update-password', requestUrl.origin))
       }
 
-      // Check if this user already has a project
+      // Also check via session amr for password recovery
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user?.amr?.find((factor: any) => factor.method === 'otp')) {
+        return NextResponse.redirect(new URL('/update-password', requestUrl.origin))
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: projects } = await supabase
@@ -44,17 +49,14 @@ export async function GET(request: NextRequest) {
           .eq('user_id', user.id)
           .limit(1)
 
-        // New user with no project → send to onboarding
         if (!projects || projects.length === 0) {
           return NextResponse.redirect(new URL('/onboarding', requestUrl.origin))
         }
       }
 
-      // Existing user with a project → send to home
-      return NextResponse.redirect(new URL('/', requestUrl.origin))
+      return NextResponse.redirect(new URL('/home', requestUrl.origin))
     }
   }
 
-  // Auth error — redirect to login with error message
   return NextResponse.redirect(new URL('/login?error=auth', requestUrl.origin))
 }
