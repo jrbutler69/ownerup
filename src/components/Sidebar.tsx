@@ -43,7 +43,6 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
     return getAccess(key)
   }
 
-  // Returns true if user has any document access at all
   function hasAnyDocAccess(): boolean {
     if (isOwnerOrCoOwner) return true
     return Array.from(DOCUMENT_SUBCATEGORIES).some(cat => getDocCategoryAccess(cat) !== 'none')
@@ -54,46 +53,62 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
     router.push('/login')
   }
 
- async function handleSwitchProject(projectId: string) {
-  await switchProject(projectId)
-  await new Promise(resolve => setTimeout(resolve, 300))
-  router.refresh()
-}
+  async function handleSwitchProject(projectId: string) {
+    await switchProject(projectId)
+    await new Promise(resolve => setTimeout(resolve, 300))
+    router.refresh()
+  }
 
- function NavButton({ label, path, section }: { label: string, path: string, section: string }) {
-  const access = getAccess(section)
-  const isActive = pathname === path
-  const isDisabled = access === 'none'
+  function NavButton({ label, path, section, liveStyle }: { label: string, path: string, section: string, liveStyle?: boolean }) {
+    const access = getAccess(section)
+    const isActive = pathname === path
+    const isDisabled = access === 'none' && !liveStyle
 
-  return (
-   <button
-      className={`nav-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
-      onClick={() => !isDisabled && router.push(path)}
-      title={isDisabled ? 'You don\'t have access to this section' : undefined}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        color: isDisabled ? 'rgba(142,134,120,0.4)' : '#8A8278',
-        fontFamily: "'DM Mono', monospace",
-        fontSize: '11px',
-        letterSpacing: '0.18em',
-        textTransform: 'uppercase' as const,
-        fontWeight: 400,
-        opacity: isDisabled ? 0.4 : 1,
-        textAlign: 'left' as const,
-        marginTop: '8px',
-        padding: '10px 24px',
-        width: '100%',
-        background: 'none',
-        border: 'none',
-        borderLeft: '2px solid transparent',
-        cursor: isDisabled ? 'default' : 'pointer',
-      }}
-    >
-      {label}
-    </button>
-  )
-}
+    return (
+      <button
+        className={`nav-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''} ${liveStyle ? 'live-item' : ''}`}
+        onClick={() => !isDisabled && router.push(path)}
+        title={isDisabled ? "You don't have access to this section" : undefined}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          color: liveStyle
+            ? (isActive ? '#E8593C' : '#C0392B')
+            : isDisabled ? 'rgba(142,134,120,0.4)' : '#8A8278',
+          fontFamily: "'DM Mono', monospace",
+          fontSize: '11px',
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase' as const,
+          fontWeight: liveStyle ? 500 : 400,
+          opacity: isDisabled ? 0.4 : 1,
+          textAlign: 'left' as const,
+          marginTop: '8px',
+          padding: '10px 24px',
+          width: '100%',
+          background: isActive && liveStyle ? 'rgba(192,57,43,0.08)' : 'none',
+          border: 'none',
+          borderLeft: isActive
+            ? (liveStyle ? '2px solid #C0392B' : '2px solid #C9B99A')
+            : '2px solid transparent',
+          cursor: isDisabled ? 'default' : 'pointer',
+        }}
+      >
+        {liveStyle && (
+          <span style={{
+            width: '7px',
+            height: '7px',
+            borderRadius: '50%',
+            background: '#C0392B',
+            display: 'inline-block',
+            marginRight: '8px',
+            flexShrink: 0,
+            boxShadow: '0 0 4px rgba(192,57,43,0.5)',
+          }} />
+        )}
+        {label}
+      </button>
+    )
+  }
 
   return (
     <aside className="sidebar">
@@ -142,7 +157,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
       </div>
 
       <nav className="sidebar-nav">
-        {/* Home — always accessible */}
+        {/* Home */}
         <button
           className={`nav-item ${pathname === '/home' ? 'active' : ''}`}
           onClick={() => router.push('/home')}
@@ -154,6 +169,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
         <button
           className={`nav-item ${isDocuments && !activeCategory ? 'active' : ''} ${!hasAnyDocAccess() ? 'disabled' : ''}`}
           onClick={() => hasAnyDocAccess() && router.push('/documents')}
+          style={{ marginTop: '16px' }}
         >
           <span className="nav-label">Documents</span>
         </button>
@@ -168,7 +184,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
                 key={cat}
                 className={`doc-cat-item ${activeCategory === cat ? 'cat-active' : ''} ${isDisabled ? 'cat-disabled' : ''}`}
                 onClick={() => !isDisabled && router.push(`/documents?category=${encodeURIComponent(cat)}`)}
-                title={isDisabled ? 'You don\'t have access to this section' : undefined}
+                title={isDisabled ? "You don't have access to this section" : undefined}
               >
                 {cat}
               </button>
@@ -176,6 +192,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
           })}
         </div>
 
+        <NavButton label="Live Sheets" path="/live-sheets" section="live_sheets" liveStyle={true} />
         <NavButton label="Photos" path="/photos" section="photos" />
         <NavButton label="Renderings" path="/renderings" section="renderings" />
         <NavButton label="Notes" path="/notes" section="notes" />
@@ -402,7 +419,7 @@ function SidebarInner({ allProjects, selectedProjectId, userRole, permissions }:
           border-left-color: #C9B99A;
         }
 
-      .doc-cat-item.cat-disabled {
+        .doc-cat-item.cat-disabled {
           color: #6A6358;
           cursor: default;
           pointer-events: none;
