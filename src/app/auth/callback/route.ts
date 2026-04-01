@@ -8,6 +8,11 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
   const type = requestUrl.searchParams.get('type')
 
+  // Debug: redirect to a URL that shows us all the params
+  if (!code) {
+    return NextResponse.redirect(new URL(`/login?error=nocode&type=${type}&params=${requestUrl.search}`, 'https://metalog.app'))
+  }
+
   if (code) {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -30,7 +35,6 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // Check type from URL or check the session for recovery
       if (type === 'recovery') {
         return NextResponse.redirect(new URL('/update-password', 'https://metalog.app'))
       }
