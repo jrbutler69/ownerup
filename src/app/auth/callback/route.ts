@@ -35,12 +35,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(new URL('/update-password', requestUrl.origin))
       }
 
-      // Also check via session amr for password recovery
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user?.amr?.find((factor: any) => factor.method === 'otp')) {
-        return NextResponse.redirect(new URL('/update-password', requestUrl.origin))
-      }
-
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: projects } = await supabase
