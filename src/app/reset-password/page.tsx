@@ -20,7 +20,7 @@ export default function ResetPasswordPage() {
     setLoading(true)
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-  redirectTo: `${window.location.origin}/auth/reset-callback`,
+  redirectTo: `https://metalog.app/auth/callback?type=recovery`,
 })
 
     if (error) {
