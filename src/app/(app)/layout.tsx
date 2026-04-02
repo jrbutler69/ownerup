@@ -1,8 +1,13 @@
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
+import MobileLayout from '@/components/MobileLayout'
+
+function isMobileUserAgent(ua: string): boolean {
+  return /iPhone|Android|Mobile/i.test(ua)
+}
 
 export default async function AppLayout({
   children,
@@ -10,6 +15,10 @@ export default async function AppLayout({
   children: React.ReactNode
 }) {
   const cookieStore = await cookies()
+  const headersList = await headers()
+  const userAgent = headersList.get('user-agent') ?? ''
+  const mobile = isMobileUserAgent(userAgent)
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -24,7 +33,6 @@ export default async function AppLayout({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Lazy profile check — if no profile exists, send to profile setup
   const { data: profile } = await supabase
     .from('profiles')
     .select('id')
@@ -63,6 +71,23 @@ export default async function AppLayout({
     }
   }
 
+  // Mobile layout
+  if (mobile) {
+    return (
+      <MobileLayout
+        allProjects={allProjects}
+        selectedProjectId={project?.id ?? ''}
+        userRole={userRole}
+        permissions={permissions}
+        projectName={project?.name ?? '—'}
+        projectAddress={project?.address ?? ''}
+      >
+        {children}
+      </MobileLayout>
+    )
+  }
+
+  // Desktop layout
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar
