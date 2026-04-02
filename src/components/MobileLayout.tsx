@@ -276,7 +276,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   menuProjectChevron: {
     fontFamily: "'DM Mono', monospace",
-    fontSize: 12,
+    fontSize: 16,
     color: '#C9B99A',
     flexShrink: 0,
   },
