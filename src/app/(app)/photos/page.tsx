@@ -39,7 +39,7 @@ interface QueuedPhoto {
 function groupByWeek(photos: Photo[]): GroupedPhotos[] {
   const groups: Record<string, Photo[]> = {}
   for (const photo of photos) {
-    const date = new Date(photo.taken_at || photo.uploaded_at)
+    const date = new Date(raw.slice(0, 10) + 'T00:00:00')
     const day = date.getDay()
     const diff = date.getDate() - day + (day === 0 ? -6 : 1)
     const monday = new Date(date.setDate(diff))
@@ -64,8 +64,8 @@ function groupByWeek(photos: Photo[]): GroupedPhotos[] {
 function groupByDay(photos: Photo[], episodes: Episode[]): GroupedPhotos[] {
   const groups: Record<string, Photo[]> = {}
   for (const photo of photos) {
-    const date = new Date(photo.taken_at || photo.uploaded_at)
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    const raw = photo.taken_at || photo.uploaded_at
+const key = raw.slice(0, 10)
     if (!groups[key]) groups[key] = []
     groups[key].push(photo)
   }
