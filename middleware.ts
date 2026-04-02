@@ -47,6 +47,11 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
+  // Public static pages — accessible to anyone
+  if (pathname.startsWith('/terms') || pathname.startsWith('/privacy')) {
+    return supabaseResponse
+  }
+
   // Allow login, auth callback, signup, reset, update password
   if (
     pathname.startsWith('/login') ||
@@ -62,7 +67,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
- // Allow onboarding and profile-setup for logged-in users only
+  // Allow onboarding and profile-setup for logged-in users only
   if (pathname.startsWith('/onboarding') || pathname.startsWith('/profile-setup')) {
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))

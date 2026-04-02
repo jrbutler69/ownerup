@@ -113,7 +113,7 @@ export default function OnboardingPage() {
 
         {step === 2 && (
           <>
-            <p style={styles.heading}>Set up your project</p>
+            <p style={styles.heading}>Set up your first project</p>
             <p style={styles.subtitle}>This takes 30 seconds. You can edit everything later.</p>
 
             <form onSubmit={handleStep2} style={styles.form}>

@@ -17,7 +17,7 @@ export default function LandingPage() {
       <section style={styles.hero}>
         <p style={styles.eyebrow}>FOR ARCHITECTS, DESIGNERS, AND THEIR CLIENTS</p>
         <h1 style={styles.headline}>
-          A live project dashboard<br />for every client.
+          A live dashboard for every<br />residential project.
         </h1>
         <p style={styles.subheadline}>
           Metalog gives your clients one place to follow the project —<br />
@@ -91,7 +91,13 @@ export default function LandingPage() {
       {/* Footer */}
       <footer style={styles.footer}>
         <span style={styles.footerLogo}>METALOG</span>
-        <span style={styles.footerText}>© 2026</span>
+        <div style={styles.footerRight}>
+          <span style={styles.footerText}>© 2026 Metalog. All rights reserved.</span>
+          <span style={styles.footerDot}>·</span>
+          <Link href="/terms" style={styles.footerLink}>Terms</Link>
+          <span style={styles.footerDot}>·</span>
+          <Link href="/privacy" style={styles.footerLink}>Privacy</Link>
+        </div>
       </footer>
 
     </div>
@@ -343,9 +349,24 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: '0.2em',
     color: '#999',
   },
+  footerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
   footerText: {
     fontSize: '10px',
     color: '#999',
-    letterSpacing: '0.08em',
+    letterSpacing: '0.04em',
+  },
+  footerDot: {
+    fontSize: '10px',
+    color: '#CCC',
+  },
+  footerLink: {
+    fontSize: '10px',
+    color: '#999',
+    letterSpacing: '0.04em',
+    textDecoration: 'none',
   },
 }
