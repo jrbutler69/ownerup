@@ -43,7 +43,7 @@ export default function MobileLayout({
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
-  const [showMenu, setShowMenu] = useState(false)
+  const [showMenu, setShowMenu] = useState(true)
   const [showSwitcher, setShowSwitcher] = useState(false)
 
   const isOwnerOrCoOwner = ['admin', 'co-admin'].includes(userRole)
@@ -91,11 +91,8 @@ export default function MobileLayout({
   }
 
   // Menu screen
-  if (showMenu || pathname === '/home') {
-    // If we're on /home and menu is not explicitly shown, show content
-    // If menu button was tapped from any screen, show menu
-    if (showMenu) {
-      return (
+  if (showMenu) {
+    return (
         <div style={styles.root}>
           {/* Menu header */}
           <div style={styles.menuHeader}>
@@ -167,7 +164,6 @@ export default function MobileLayout({
           </div>
         </div>
       )
-    }
   }
 
   // Content screen (any non-menu screen, or /home when menu is closed)
@@ -176,7 +172,7 @@ export default function MobileLayout({
       {/* Content header with back arrow */}
       <div style={styles.contentHeader}>
         <button style={styles.backBtn} onClick={() => setShowMenu(true)}>
-          ← Menu
+          ← Home
         </button>
         <span style={styles.contentHeaderLabel}>{sectionLabel}</span>
         <div style={{ width: 60 }} />
@@ -373,23 +369,24 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '16px 20px',
+    padding: '14px 20px',
     borderBottom: '1px solid #E0D9D0',
-    backgroundColor: '#F0EDE8',
+    backgroundColor: '#151412',
     position: 'sticky' as const,
     top: 0,
     zIndex: 10,
   },
   backBtn: {
     background: 'none',
-    border: 'none',
+    border: '1px solid rgba(201,185,154,0.4)',
+    borderRadius: 2,
     fontFamily: "'DM Mono', monospace",
     fontSize: 11,
-    letterSpacing: '0.1em',
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase' as const,
     color: '#C9B99A',
     cursor: 'pointer',
-    padding: 0,
-    width: 60,
+    padding: '8px 14px',
     textAlign: 'left' as const,
   },
   contentHeaderLabel: {
@@ -397,7 +394,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 10,
     letterSpacing: '0.2em',
     textTransform: 'uppercase' as const,
-    color: '#B0A898',
+    color: 'rgba(201,185,154,0.5)',
   },
   contentProjectBar: {
     padding: '24px 24px 0',
