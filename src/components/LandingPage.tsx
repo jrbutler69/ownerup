@@ -20,9 +20,9 @@ export default function LandingPage() {
           A live dashboard for every<br />residential project.
         </h1>
         <p style={styles.subheadline}>
-          Metalog gives your clients one place to follow the project —<br />
-          drawings, photos, decisions, and renderings, always up to date.<br />
-          You control what they see.
+          Metalog is a simple hub for renovations and new builds —<br />
+          plans, photos, budgets, and renderings, always up to date.<br />
+          NOW syncable and embeddable with Google Sheets.
         </p>
         <Link href="/signup" style={styles.heroCta}>Create your first project</Link>
       </section>
