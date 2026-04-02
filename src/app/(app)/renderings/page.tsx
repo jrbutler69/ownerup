@@ -38,21 +38,22 @@ interface QueuedRendering {
 function groupByWeek(renderings: Rendering[]): GroupedRenderings[] {
   const groups: Record<string, Rendering[]> = {}
   for (const rendering of renderings) {
-    const date = new Date(rendering.taken_at || rendering.uploaded_at)
-    const day = date.getDay()
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1)
-    const monday = new Date(date.setDate(diff))
-    monday.setHours(0, 0, 0, 0)
-    const key = monday.toISOString()
+    const raw = rendering.taken_at || rendering.uploaded_at
+    const [year, month, day] = raw.slice(0, 10).split('-').map(Number)
+    const date = new Date(year, month - 1, day)
+    const dow = date.getDay()
+    const diff = date.getDate() - dow + (dow === 0 ? -6 : 1)
+    const monday = new Date(year, month - 1, diff)
+    const key = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
     if (!groups[key]) groups[key] = []
     groups[key].push(rendering)
   }
   return Object.entries(groups)
-    .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
+    .sort(([a], [b]) => b.localeCompare(a))
     .map(([key, renderings]) => {
-      const monday = new Date(key)
-      const sunday = new Date(monday)
-      sunday.setDate(monday.getDate() + 6)
+      const [y, m, d] = key.split('-').map(Number)
+      const monday = new Date(y, m - 1, d)
+      const sunday = new Date(y, m - 1, d + 6)
       const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
       const start = monday.toLocaleDateString('en-US', opts)
       const end = sunday.toLocaleDateString('en-US', { ...opts, year: 'numeric' })
@@ -63,8 +64,7 @@ function groupByWeek(renderings: Rendering[]): GroupedRenderings[] {
 function groupByDay(renderings: Rendering[], episodes: Episode[]): GroupedRenderings[] {
   const groups: Record<string, Rendering[]> = {}
   for (const rendering of renderings) {
-    const date = new Date(rendering.taken_at || rendering.uploaded_at)
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    const key = (rendering.taken_at || rendering.uploaded_at).slice(0, 10)
     if (!groups[key]) groups[key] = []
     groups[key].push(rendering)
   }
