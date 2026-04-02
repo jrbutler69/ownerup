@@ -102,8 +102,13 @@ export default function RenderingsPage() {
   const [editingEpisodeKey, setEditingEpisodeKey] = useState<string | null>(null)
   const [editingEpisodeTitle, setEditingEpisodeTitle] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768)
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -127,7 +132,7 @@ export default function RenderingsPage() {
 
       const memberRow = memberRows.find(r => r.project_id === pid)
       const role = memberRow?.role ?? 'other'
-      if (['owner', 'co-owner'].includes(role)) {
+      if (['owner', 'co-owner', 'admin', 'co-admin'].includes(role)) {
         setHasAnyAccess(true); setCanEdit(true)
       } else {
         const { data: perms } = await supabase.rpc('get_my_permissions', { p_project_id: pid })
@@ -140,21 +145,14 @@ export default function RenderingsPage() {
   }, [])
 
   function addFilesToQueue(files: FileList | File[]) {
-    const newItems: QueuedRendering[] = Array.from(files).map(f => ({
-      id: crypto.randomUUID(),
-      file: f,
-      status: 'pending'
-    }))
+    const newItems: QueuedRendering[] = Array.from(files).map(f => ({ id: crypto.randomUUID(), file: f, status: 'pending' }))
     setQueue(prev => [...prev, ...newItems])
   }
 
-  function removeFromQueue(id: string) {
-    setQueue(prev => prev.filter(f => f.id !== id))
-  }
+  function removeFromQueue(id: string) { setQueue(prev => prev.filter(f => f.id !== id)) }
 
   function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    setDragOver(false)
+    e.preventDefault(); setDragOver(false)
     if (e.dataTransfer.files.length > 0) addFilesToQueue(e.dataTransfer.files)
   }
 
@@ -163,69 +161,41 @@ export default function RenderingsPage() {
     if (existing) {
       if (title && !existing.title) {
         const { data: updated } = await supabase.from('episodes').update({ title }).eq('id', existing.id).select().single()
-        if (updated) {
-          setEpisodes(prev => prev.map(e => e.id === updated.id ? updated : e))
-          return updated
-        }
+        if (updated) { setEpisodes(prev => prev.map(e => e.id === updated.id ? updated : e)); return updated }
       }
       return existing
     }
     const { data: newEpisode } = await supabase.from('episodes').insert({
       project_id: pid, episode_date: date, type: 'renderings', title: title || null,
     }).select().single()
-    if (newEpisode) {
-      setEpisodes(prev => [...prev, newEpisode])
-      return newEpisode
-    }
+    if (newEpisode) { setEpisodes(prev => [...prev, newEpisode]); return newEpisode }
     return null
   }
 
   async function handleUploadAll() {
     if (!projectId || !currentUserId || queue.filter(f => f.status === 'pending').length === 0) return
-    setUploading(true)
-    setError(null)
-
+    setUploading(true); setError(null)
     await getOrCreateEpisode(projectId, episodeDate, episodeTitleInput.trim())
-
     const newRenderings: Rendering[] = []
     for (const item of queue) {
       if (item.status !== 'pending') continue
       setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'uploading' } : f))
-
       const ext = item.file.name.split('.').pop()
       const filename = `${projectId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
       const { error: uploadError } = await supabase.storage.from('renderings').upload(filename, item.file)
-      if (uploadError) {
-        setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: uploadError.message } : f))
-        continue
-      }
+      if (uploadError) { setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: uploadError.message } : f)); continue }
       const { data: { publicUrl } } = supabase.storage.from('renderings').getPublicUrl(filename)
       const { data: newRendering, error: dbError } = await supabase.from('renderings').insert({
-        project_id: projectId,
-        image_url: publicUrl,
+        project_id: projectId, image_url: publicUrl,
         taken_at: new Date(episodeDate + 'T12:00:00').toISOString(),
-        uploaded_at: new Date().toISOString(),
-        caption: null,
-        uploaded_by: currentUserId,
+        uploaded_at: new Date().toISOString(), caption: null, uploaded_by: currentUserId,
       }).select().single()
-
-      if (dbError) {
-        setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: dbError.message } : f))
-      } else if (newRendering) {
-        newRenderings.push(newRendering)
-        setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'done' } : f))
-      }
+      if (dbError) { setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: dbError.message } : f)) }
+      else if (newRendering) { newRenderings.push(newRendering); setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'done' } : f)) }
     }
-
     if (newRenderings.length) setRenderings(prev => [...newRenderings, ...prev])
     setUploading(false)
-
-    if (!queue.some(f => f.status === 'error')) {
-      setTimeout(() => {
-        setQueue([])
-        setEpisodeTitleInput('')
-      }, 800)
-    }
+    if (!queue.some(f => f.status === 'error')) setTimeout(() => { setQueue([]); setEpisodeTitleInput('') }, 800)
   }
 
   async function handleDelete(rendering: Rendering) {
@@ -253,8 +223,7 @@ export default function RenderingsPage() {
   }
 
   function startEditingEpisode(key: string, currentTitle: string | null) {
-    setEditingEpisodeKey(key)
-    setEditingEpisodeTitle(currentTitle ?? '')
+    setEditingEpisodeKey(key); setEditingEpisodeTitle(currentTitle ?? '')
     setTimeout(() => editInputRef.current?.focus(), 50)
   }
 
@@ -288,6 +257,142 @@ export default function RenderingsPage() {
     )
   }
 
+  // ─── MOBILE VIEW ────────────────────────────────────────────────────────────
+  if (isMobile) {
+    const mobileFileInputRef = fileInputRef
+    const mobilePendingCount = queue.filter(f => f.status === 'pending').length
+    const mobileDoneCount = queue.filter(f => f.status === 'done').length
+
+    return (
+      <div>
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=DM+Mono:wght@300;400&display=swap');
+          .mobile-rendering { width: 100%; border-radius: 4px; display: block; object-fit: cover; cursor: pointer; }
+          .mobile-group-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #9A8F82; margin: 28px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #E8E0D5; }
+          .mobile-group-label:first-child { margin-top: 0; }
+          .lightbox-overlay { position: fixed; inset: 0; background: rgba(28,26,23,0.96); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+          .lightbox-img { max-width: 96vw; max-height: 82vh; border-radius: 4px; object-fit: contain; }
+          .lightbox-close { position: absolute; top: 20px; right: 20px; color: #F5F2EE; font-size: 28px; cursor: pointer; background: none; border: none; line-height: 1; padding: 8px; }
+          .lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); background: none; border: none; color: rgba(255,255,255,0.5); font-size: 36px; cursor: pointer; padding: 16px; font-family: 'DM Mono', monospace; }
+          .lightbox-nav--prev { left: 0; }
+          .lightbox-nav--next { right: 0; }
+          .mobile-queue-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #E8E0D5; }
+          .mobile-queue-item:last-child { border-bottom: none; }
+        `}</style>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div>
+            <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 400, color: '#1C1A17', margin: '0 0 4px' }}>Renderings</h1>
+            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', margin: 0 }}>
+              {renderings.length} rendering{renderings.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          {canEdit && (
+            <button
+              onClick={() => mobileFileInputRef.current?.click()}
+              style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '10px 18px', backgroundColor: '#151412', color: '#F0EDE8', border: 'none', borderRadius: 2, cursor: 'pointer' }}
+            >
+              + Add
+            </button>
+          )}
+          <input
+            ref={mobileFileInputRef}
+            type="file"
+            accept="image/*,.pdf"
+            multiple
+            style={{ display: 'none' }}
+            onChange={e => e.target.files && addFilesToQueue(e.target.files)}
+          />
+        </div>
+
+        {/* Mobile upload panel */}
+        {queue.length > 0 && (
+          <div style={{ backgroundColor: '#fff', border: '1px solid #D8D2C8', borderRadius: 4, padding: 16, marginBottom: 20 }}>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055', display: 'block', marginBottom: 6 }}>
+                Series name (optional)
+              </label>
+              <input
+                type="text"
+                value={episodeTitleInput}
+                onChange={e => setEpisodeTitleInput(e.target.value)}
+                placeholder="e.g. Exterior elevations v2"
+                style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: '#F8F6F3', border: '1px solid #D8D2C8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 13, color: '#1C1A17', outline: 'none' }}
+              />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              {queue.map(item => (
+                <div key={item.id} className="mobile-queue-item">
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, width: 18, height: 18, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: item.status === 'done' ? '#eef4ee' : item.status === 'error' ? '#fdf0ed' : item.status === 'uploading' ? '#e8f0e8' : '#e8e0d5', color: item.status === 'done' ? '#4a7a4a' : item.status === 'error' ? '#c0532a' : item.status === 'uploading' ? '#4a7a4a' : 'transparent' }}>
+                    {item.status === 'done' ? '✓' : item.status === 'error' ? '!' : item.status === 'uploading' ? '↑' : ''}
+                  </span>
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#3a3530', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.file.name}</span>
+                  {item.status === 'pending' && !uploading && (
+                    <button onClick={() => removeFromQueue(item.id)} style={{ background: 'none', border: 'none', color: '#bbb0a0', fontSize: 14, cursor: 'pointer', padding: '2px 4px', fontFamily: "'DM Mono', monospace" }}>✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => { setQueue([]); setEpisodeTitleInput('') }}
+                disabled={uploading}
+                style={{ flex: 1, fontFamily: "'DM Mono', monospace", fontSize: 11, padding: '10px', background: 'none', border: '1px solid #D8D2C8', borderRadius: 2, color: '#6b6055', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUploadAll}
+                disabled={uploading || mobilePendingCount === 0}
+                style={{ flex: 2, fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: '0.08em', padding: '10px', background: '#151412', color: '#F0EDE8', border: 'none', borderRadius: 2, cursor: uploading || mobilePendingCount === 0 ? 'not-allowed' : 'pointer', opacity: uploading || mobilePendingCount === 0 ? 0.5 : 1 }}
+              >
+                {uploading ? `Uploading… (${mobileDoneCount}/${queue.length})` : `Upload ${mobilePendingCount} rendering${mobilePendingCount !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82' }}>Loading…</p>
+        ) : renderings.length === 0 ? (
+          <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: '#B0A89E', textAlign: 'center', padding: '40px 0' }}>No renderings yet.</p>
+        ) : (
+          weekGroups.map(group => (
+            <div key={group.key}>
+              <div className="mobile-group-label">{group.label}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {group.renderings.map(rendering => (
+                  <img
+                    key={rendering.id}
+                    className="mobile-rendering"
+                    src={rendering.image_url}
+                    alt={rendering.caption || 'Rendering'}
+                    onClick={() => openLightbox(rendering, group.renderings)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+
+        {lightbox && (
+          <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
+            <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
+            {lightboxGroup.findIndex(r => r.id === lightbox.id) > 0 && (
+              <button className="lightbox-nav lightbox-nav--prev" onClick={e => { e.stopPropagation(); lightboxNav(-1) }}>‹</button>
+            )}
+            <img className="lightbox-img" src={lightbox.image_url} alt={lightbox.caption || 'Rendering'} onClick={e => e.stopPropagation()} />
+            {lightboxGroup.findIndex(r => r.id === lightbox.id) < lightboxGroup.length - 1 && (
+              <button className="lightbox-nav lightbox-nav--next" onClick={e => { e.stopPropagation(); lightboxNav(1) }}>›</button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ─── DESKTOP VIEW ───────────────────────────────────────────────────────────
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
       <style>{`
@@ -325,7 +430,6 @@ export default function RenderingsPage() {
         .lightbox-nav:hover { color: #fff; }
         .lightbox-nav--prev { left: 16px; }
         .lightbox-nav--next { right: 16px; }
-        .lightbox-nav:disabled { opacity: 0.15; cursor: default; }
         .view-toggle { display: flex; gap: 0; border: 1px solid #E8E0D5; border-radius: 3px; overflow: hidden; }
         .toggle-btn { padding: 7px 16px; background: none; border: none; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #9A8F82; transition: all 0.15s; }
         .toggle-btn:first-child { border-right: 1px solid #E8E0D5; }
@@ -345,16 +449,13 @@ export default function RenderingsPage() {
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
       `}</style>
 
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
         <div>
           <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 400, color: '#1C1A17', margin: '0 0 6px' }}>
             {openEpisodeGroup ? (openEpisodeGroup.episode?.title || openEpisodeGroup.label) : 'Renderings'}
           </h1>
           {openEpisodeGroup && openEpisodeGroup.episode?.title && (
-            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              {openEpisodeGroup.label}
-            </p>
+            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8F82', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{openEpisodeGroup.label}</p>
           )}
           <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#9A8F82', margin: 0 }}>
             {openEpisodeGroup
@@ -372,14 +473,10 @@ export default function RenderingsPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {editingEpisodeKey === openEpisodeGroup.key ? (
               <>
-                <input
-                  ref={editInputRef}
-                  value={editingEpisodeTitle}
-                  onChange={e => setEditingEpisodeTitle(e.target.value)}
+                <input ref={editInputRef} value={editingEpisodeTitle} onChange={e => setEditingEpisodeTitle(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') saveEpisodeTitle(openEpisodeGroup.key, editingEpisodeTitle); if (e.key === 'Escape') setEditingEpisodeKey(null) }}
                   placeholder="Episode title…"
-                  style={{ padding: '6px 10px', background: '#fff', border: '1px solid #C9B99A', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none', width: 200 }}
-                />
+                  style={{ padding: '6px 10px', background: '#fff', border: '1px solid #C9B99A', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none', width: 200 }} />
                 <button className="episode-edit-btn" onClick={() => saveEpisodeTitle(openEpisodeGroup.key, editingEpisodeTitle)}>Save</button>
                 <button className="episode-edit-btn" style={{ color: '#9A8F82' }} onClick={() => setEditingEpisodeKey(null)}>Cancel</button>
               </>
@@ -392,69 +489,35 @@ export default function RenderingsPage() {
         )}
       </div>
 
-      {/* Upload zone */}
       {!openEpisodeGroup && canEdit && (
         <div style={{ marginBottom: 40 }}>
-          <div
-            className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
-            onDrop={handleDrop}
-            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onClick={() => fileInputRef.current?.click()}
-            style={{ marginBottom: queue.length > 0 ? 16 : 0 }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,.pdf"
-              multiple
-              style={{ display: 'none' }}
-              onChange={e => e.target.files && addFilesToQueue(e.target.files)}
-            />
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 12 }}>
-              Drop renderings here or click to select
-            </div>
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E', marginBottom: 16 }}>
-              JPG, PNG, PDF · multiple files supported
-            </div>
+          <div className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
+            onDrop={handleDrop} onDragOver={e => { e.preventDefault(); setDragOver(true) }} onDragLeave={() => setDragOver(false)}
+            onClick={() => fileInputRef.current?.click()} style={{ marginBottom: queue.length > 0 ? 16 : 0 }}>
+            <input ref={fileInputRef} type="file" accept="image/*,.pdf" multiple style={{ display: 'none' }}
+              onChange={e => e.target.files && addFilesToQueue(e.target.files)} />
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: '#6B6359', marginBottom: 12 }}>Drop renderings here or click to select</div>
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B0A89E', marginBottom: 16 }}>JPG, PNG, PDF · multiple files supported</div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Episode date</span>
-                <input
-                  type="date"
-                  value={episodeDate}
-                  onChange={e => setEpisodeDate(e.target.value)}
-                  style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none' }}
-                />
+                <input type="date" value={episodeDate} onChange={e => setEpisodeDate(e.target.value)}
+                  style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none' }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b6055' }}>Episode title</span>
-                <input
-                  type="text"
-                  value={episodeTitleInput}
-                  onChange={e => setEpisodeTitleInput(e.target.value)}
-                  placeholder="Optional"
-                  style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none', width: 180 }}
-                />
+                <input type="text" value={episodeTitleInput} onChange={e => setEpisodeTitleInput(e.target.value)} placeholder="Optional"
+                  style={{ padding: '6px 10px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#1c1a17', outline: 'none', width: 180 }} />
               </div>
             </div>
           </div>
-
-          {/* Queue */}
           {queue.length > 0 && (
             <div style={{ border: '1px solid #e8e0d5', borderRadius: 4, overflow: 'hidden', background: '#faf8f5' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #e8e0d5' }}>
                 <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#6b6055' }}>
                   {queue.length} file{queue.length !== 1 ? 's' : ''}{doneCount > 0 ? ` · ${doneCount} uploaded` : ''}
                 </span>
-                {!uploading && (
-                  <button
-                    onClick={() => setQueue([])}
-                    style={{ background: 'none', border: 'none', fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#9a8e7e', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}
-                  >
-                    Clear all
-                  </button>
-                )}
+                {!uploading && <button onClick={() => setQueue([])} style={{ background: 'none', border: 'none', fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#9a8e7e', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Clear all</button>}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: 8 }}>
                 {queue.map(item => (
@@ -464,25 +527,15 @@ export default function RenderingsPage() {
                     </span>
                     <span className="queue-filename">{item.file.name}</span>
                     {item.error && <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#c0532a' }}>{item.error}</span>}
-                    {item.status === 'pending' && !uploading && (
-                      <button className="queue-remove" onClick={() => removeFromQueue(item.id)}>✕</button>
-                    )}
+                    {item.status === 'pending' && !uploading && <button className="queue-remove" onClick={() => removeFromQueue(item.id)}>✕</button>}
                   </div>
                 ))}
               </div>
               <div style={{ padding: '12px 16px', borderTop: '1px solid #e8e0d5', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button
-                  onClick={() => { setQueue([]); setEpisodeTitleInput('') }}
-                  disabled={uploading}
-                  style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, padding: '8px 16px', background: 'none', border: '1px solid #ddd5c8', borderRadius: 2, color: '#6b6055', cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUploadAll}
-                  disabled={uploading || pendingCount === 0}
-                  style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: '0.08em', padding: '8px 20px', background: '#1c1a17', color: '#f0e8d8', border: 'none', borderRadius: 2, cursor: uploading || pendingCount === 0 ? 'not-allowed' : 'pointer', opacity: uploading || pendingCount === 0 ? 0.5 : 1 }}
-                >
+                <button onClick={() => { setQueue([]); setEpisodeTitleInput('') }} disabled={uploading}
+                  style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, padding: '8px 16px', background: 'none', border: '1px solid #ddd5c8', borderRadius: 2, color: '#6b6055', cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleUploadAll} disabled={uploading || pendingCount === 0}
+                  style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: '0.08em', padding: '8px 20px', background: '#1c1a17', color: '#f0e8d8', border: 'none', borderRadius: 2, cursor: uploading || pendingCount === 0 ? 'not-allowed' : 'pointer', opacity: uploading || pendingCount === 0 ? 0.5 : 1 }}>
                   {uploading ? `Uploading… (${doneCount}/${queue.length})` : `Upload ${pendingCount} rendering${pendingCount !== 1 ? 's' : ''}`}
                 </button>
               </div>
@@ -538,9 +591,7 @@ export default function RenderingsPage() {
                 <div className="episode-info">
                   <p className="episode-title">{displayTitle}</p>
                   {hasCustomTitle && <p className="episode-date-sub">{group.label}</p>}
-                  <div className="episode-info-row">
-                    <p className="episode-count">{group.sublabel}</p>
-                  </div>
+                  <div className="episode-info-row"><p className="episode-count">{group.sublabel}</p></div>
                 </div>
               </div>
             )
@@ -561,12 +612,10 @@ export default function RenderingsPage() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 16 }}>
             {lightbox.caption && <div style={{ color: '#C9B99A', fontFamily: "'DM Mono', monospace", fontSize: 13, textAlign: 'center' }}>{lightbox.caption}</div>}
             {canEdit && (
-              <button
-                onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}
-                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '6px 16px', transition: 'all 0.15s' }}
+              <button onClick={e => { e.stopPropagation(); handleDelete(lightbox) }}
+                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '6px 16px' }}
                 onMouseEnter={e => { (e.target as HTMLButtonElement).style.color = '#E8856A'; (e.target as HTMLButtonElement).style.borderColor = '#E8856A' }}
-                onMouseLeave={e => { (e.target as HTMLButtonElement).style.color = 'rgba(255,255,255,0.5)'; (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.2)' }}
-              >
+                onMouseLeave={e => { (e.target as HTMLButtonElement).style.color = 'rgba(255,255,255,0.5)'; (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.2)' }}>
                 Delete rendering
               </button>
             )}
