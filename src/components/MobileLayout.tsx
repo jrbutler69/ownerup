@@ -110,13 +110,16 @@ export default function MobileLayout({
           {/* Project name */}
           <div style={styles.menuProject}>
             <p style={styles.menuProjectLabel}>CURRENT PROJECT</p>
-            <p style={styles.menuProjectName}>{projectName}</p>
+            <button
+              style={styles.menuProjectNameBtn}
+              onClick={() => allProjects.length > 1 && setShowSwitcher(!showSwitcher)}
+            >
+              <span style={styles.menuProjectName}>{projectName}</span>
+              {allProjects.length > 1 && (
+                <span style={styles.menuProjectChevron}>{showSwitcher ? '▲' : '▾'}</span>
+              )}
+            </button>
             {projectAddress && <p style={styles.menuProjectAddress}>{projectAddress}</p>}
-            {allProjects.length > 1 && (
-              <button style={styles.switchProjectBtn} onClick={() => setShowSwitcher(!showSwitcher)}>
-                Switch project {showSwitcher ? '▲' : '▼'}
-              </button>
-            )}
             {showSwitcher && (
               <div style={styles.projectDropdown}>
                 {allProjects.map(p => (
@@ -126,6 +129,7 @@ export default function MobileLayout({
                     onClick={() => handleSwitchProject(p.id)}
                   >
                     {p.name}
+                    {p.id === selectedProjectId && <span style={{ marginLeft: 'auto', color: '#C9B99A' }}>✓</span>}
                   </button>
                 ))}
               </div>
@@ -252,13 +256,29 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'rgba(201,185,154,0.5)',
     margin: '0 0 8px',
   },
+  menuProjectNameBtn: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 10,
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    cursor: 'pointer',
+    textAlign: 'left' as const,
+    margin: '0 0 4px',
+  },
   menuProjectName: {
     fontFamily: "'Cormorant Garamond', serif",
     fontSize: 28,
     fontWeight: 300,
     color: '#E8E3DC',
-    margin: '0 0 4px',
     letterSpacing: '-0.01em',
+  },
+  menuProjectChevron: {
+    fontFamily: "'DM Mono', monospace",
+    fontSize: 12,
+    color: '#C9B99A',
+    flexShrink: 0,
   },
   menuProjectAddress: {
     fontFamily: "'DM Mono', monospace",
@@ -267,16 +287,6 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: '0.08em',
     margin: 0,
   },
-  switchProjectBtn: {
-    background: 'none',
-    border: 'none',
-    fontFamily: "'DM Mono', monospace",
-    fontSize: 10,
-    color: '#C9B99A',
-    letterSpacing: '0.08em',
-    cursor: 'pointer',
-    padding: '8px 0 0',
-  },
   projectDropdown: {
     marginTop: 8,
     backgroundColor: '#1E1C19',
@@ -284,14 +294,16 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 2,
   },
   projectOption: {
-    display: 'block',
+    display: 'flex',
+    alignItems: 'center',
     width: '100%',
-    padding: '12px 16px',
+    padding: '14px 16px',
     background: 'none',
     border: 'none',
+    borderBottom: '1px solid rgba(255,255,255,0.04)',
     textAlign: 'left' as const,
     fontFamily: "'DM Mono', monospace",
-    fontSize: 11,
+    fontSize: 12,
     color: '#6A6358',
     letterSpacing: '0.08em',
     cursor: 'pointer',
