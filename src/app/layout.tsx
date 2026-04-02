@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Metalog — Project Dashboard for Architects and Their Clients",
+  title: "Metalog — Residential Project Management Made Simple",
   description: "Metalog is a project dashboard for residential architects and their clients. One place for drawings, photos, renderings, and decisions. Free to use.",
   metadataBase: new URL("https://metalog.app"),
   openGraph: {
-    title: "Metalog — Project Dashboard for Architects and Their Clients",
+    title: "Metalog — Residential Project Management Made Simple",
     description: "One place for drawings, photos, renderings, and decisions. Built for residential architects and their clients.",
     url: "https://metalog.app",
     siteName: "Metalog",
