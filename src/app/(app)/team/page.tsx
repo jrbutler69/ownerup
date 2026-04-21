@@ -180,9 +180,12 @@ export default function TeamPage() {
   async function startEditPermissions(member: Member) {
     if (!projectId) return
     setEditError('')
-    const { data: perms } = await supabase
+    const query = supabase
       .from('project_permissions').select('section, access_level')
-      .eq('project_id', projectId).eq('invited_email', member.invited_email)
+      .eq('project_id', projectId)
+    const { data: perms } = member.user_id
+      ? await query.eq('user_id', member.user_id)
+      : await query.eq('invited_email', member.invited_email)
     const loaded = emptyPerms()
     if (perms) {
       for (const p of perms) {
@@ -202,15 +205,17 @@ export default function TeamPage() {
     setEditLoading(true); setEditError('')
     const upserts = SECTIONS.map(s => ({
       project_id: projectId,
-      invited_email: member.invited_email,
-      user_id: member.user_id,
+      invited_email: member.user_id ? null : member.invited_email,
+      user_id: member.user_id ?? null,
       section: s.key,
       access_level: editPermissions[s.key],
     }))
+    const conflictCol = member.user_id ? 'project_id,user_id,section' : 'project_id,invited_email,section'
     const { error } = await supabase
-      .from('project_permissions').upsert(upserts, { onConflict: 'project_id,invited_email,section' })
+      .from('project_permissions').upsert(upserts, { onConflict: conflictCol })
     if (error) {
       setEditError('Failed to save. Please try again.')
+      console.error('Permissions save error:', error)
     } else {
       setEditingMemberId(null)
     }

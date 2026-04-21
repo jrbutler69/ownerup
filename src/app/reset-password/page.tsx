@@ -36,7 +36,7 @@ export default function ResetPasswordPage() {
     return (
       <div style={styles.page}>
         <div style={styles.box}>
-          <div style={styles.logo}>OWNERUP</div>
+          <div style={styles.logo}>Metalog</div>
           <p style={styles.confirmTitle}>Check your email</p>
           <p style={styles.confirmBody}>
             We sent a password reset link to <strong>{email}</strong>.<br />
@@ -51,7 +51,7 @@ export default function ResetPasswordPage() {
   return (
     <div style={styles.page}>
       <div style={styles.box}>
-        <div style={styles.logo}>OWNERUP</div>
+        <div style={styles.logo}>METALOG</div>
         <p style={styles.heading}>Reset your password</p>
         <p style={styles.subtitle}>Enter your email and we'll send you a reset link.</p>
 
