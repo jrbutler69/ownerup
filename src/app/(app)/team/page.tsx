@@ -222,12 +222,18 @@ export default function TeamPage() {
     setEditLoading(false)
   }
 
-  async function handleRevoke(memberId: string) {
-    if (!confirm('Remove this person from the project?')) return
-    await supabase.from('project_members').delete().eq('id', memberId)
-    setMembers(prev => prev.filter(m => m.id !== memberId))
-    if (editingMemberId === memberId) setEditingMemberId(null)
+async function handleRevoke(memberId: string) {
+  if (!confirm('Remove this person from the project?')) return
+  const member = members.find(m => m.id === memberId)
+  await supabase.from('project_members').delete().eq('id', memberId)
+  if (member?.invited_email) {
+    await supabase.from('project_invites').delete()
+      .eq('project_id', projectId)
+      .eq('invited_email', member.invited_email)
   }
+  setMembers(prev => prev.filter(m => m.id !== memberId))
+  if (editingMemberId === memberId) setEditingMemberId(null)
+}
 
   const statusLabel: Record<string, string> = { active: 'Active', invited: 'Invite pending', declined: 'Declined' }
 
